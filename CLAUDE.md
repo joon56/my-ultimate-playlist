@@ -10,6 +10,7 @@
 - `docs/QA_CHECKLIST.md` — 품질 검사 Q01–Q15, 관문 G1–G3 기준
 - `docs/DECISIONS.md` — 열린 결정과 변경 기록. 새 결정은 여기에 적는다
 - `docs/DATA_FACTS.md` — 실제 파일에서 확인한 사실(Phase 0에서 채운다)
+- `docs/CHECKLIST.md` — 열린 할 일과 결정 대기(K-xx). 사용자가 답하거나 해결·변경되면 그 항목을 지운다(결정은 DECISIONS.md, 사실은 DATA_FACTS.md로 옮긴 뒤)
 - `data/README.md` — CSV 열 설명 · `config/params.toml` — 모든 문턱과 파라미터
 
 ## 어기면 안 되는 것
@@ -43,4 +44,4 @@
 
 ## 지금 상태
 
-Phase 0 시작 전이다. 사용자가 시범 측정 zip을 `data/raw/`에 넣는다. 실험 1은 11/9부터, 실험 2·3은 11/14다.
+Phase 0 끝(2026-11-07, 시범 파일 `TEST_A_1107` 1개 기준: DATA_FACTS, DECISIONS D-27–D-34). Phase 1은 계획 승인 대기다(`docs/CHECKLIST.md` 부록 A). 11/8 사전 점검, 실험 1은 11/9부터, 실험 2·3은 11/14다.
