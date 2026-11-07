@@ -1,0 +1,2 @@
+walk_id,experiment,participant,walk_no,redo_of,date,start_time,condition,start_song,direction,weather,temp_c,bag,hurried,music_offset_s,songs_played,hand_step_count,hand_step_note,zip_file,status,notes
+TEST_A_1107,TEST,A,,,2026-11-07,,,,,,,,,,,,,,test,"시범 측정: 산책, 화면 끄고 기록, 조건 없음. start_time과 zip_file은 사용자에게 물어서 채울 것"

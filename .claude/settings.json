@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(pytest)",
+      "Bash(pytest *)",
+      "Bash(python -m pytest *)",
+      "Bash(python -m walkmusic *)",
+      "Bash(ruff check *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)"
+    ],
+    "ask": [
+      "Edit(docs/SPEC.md)",
+      "Edit(data/assignment.csv)"
+    ],
+    "deny": [
+      "Edit(data/raw/**)"
+    ]
+  }
+}

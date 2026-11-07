@@ -1,0 +1,98 @@
+# config/params.toml — 분석 파라미터
+#
+# 숫자는 코드에 박지 말고 여기서 읽는다.
+# 값을 바꾸면 docs/DECISIONS.md에 날짜와 이유를 적는다.
+#   [확정] = 연구계획서·프로토콜에 있는 값. 바꾸려면 사용자 승인이 필요하다.
+#   [초안] = 이 저장소를 시작하며 정한 값. 검증(합성 신호, 시범 파일, 실제 데이터)으로 조정할 수 있다.
+# 새 키가 필요하면 아래 형식을 따라 추가하고 같은 표기([확정]/[초안])를 단다.
+
+[time]
+timezone = "Asia/Seoul"              # [확정] 기록 시각은 UTC로 저장되므로 현지 시각으로 바꿔 쓴다
+
+[constants]
+g = 9.81                             # m/s^2
+
+[qa]                                 # docs/QA_CHECKLIST.md의 임계값
+min_fs_hz = 50.0                     # [확정] 최소 샘플링
+target_fs_hz = 100.0                 # [확정] 가능하면 100 Hz
+gap_warn_s = 0.25                    # [초안] 이보다 긴 끊김은 경고
+gap_fail_s = 1.0                     # [초안] 걷는 동안 이보다 긴 끊김은 실패
+min_walk_duration_s = 480            # [확정] 한 번 걷기는 8분 이상
+hand_count_tol_steps = 2             # [확정] 100걸음 직접 세기 ± 2
+pedometer_tol_pct = 3.0              # [초안] 걸음 수 검출 vs 앱 걸음 수
+gps_distance_tol_pct = 5.0           # [확정] GPS 거리와 지도 거리 차이 5% 이내
+gps_accuracy_warn_m = 20.0           # [초안] 수평 정확도 중앙값 경고
+standing_check_s = 10                # [확정] 시작·끝 10초 서 있기
+min_valid_steps_per_segment = 30     # [초안] 곡 구간 하나에 필요한 유효 걸음 수
+max_bad_interval_frac = 0.05         # [초안] 이상 걸음 간격 비율 상한
+phone_tilt_warn_deg = 30.0           # [초안] 회차 간 폰 방향 차이 경고
+
+[exclude]
+edge_s = 20                          # [확정] 출발·도착 전후 20초
+boundary_s = 10                      # [확정] 곡 경계 앞뒤 10초
+stop_gap_s = 2.0                     # [확정] 걸음이 2초 넘게 없으면 정지
+phone_touch_pad_s = 5                # [초안] 폰을 만진 시각 앞뒤
+stop_pad_s = 2.0                     # [초안 D-19] 정지(걸음 간격 > stop_gap_s) 앞뒤에서 함께 뺄 시간
+min_bout_steps = 10                  # [초안 D-21] 이만큼 이어진 걸음이 있어야 '지속 보행'
+
+[orientation]
+lowpass_hz = 0.3                     # [초안 D-22] 걷는 동안 수직 방향(중력 방향) 추정용 저역 통과
+
+[cadence]
+primary = "median"                   # [초안 D-05] "median"(프로토콜: 곡마다 중앙값) 또는 "rate"(계획서 2.3: 걸음 수 ÷ 시간 × 60). 둘 다 계산해 저장하고, 이 값이 PC·T·ΔC%·R에 쓰인다
+
+[steps]
+signal = "magnitude"                 # [초안] "magnitude"(계획서 4.6) 또는 "vertical"
+detect_band_hz = [0.8, 5.0]          # [초안] 걸음 검출용 대역 통과
+impact_lowpass_hz = 20.0             # [초안] 충격 피크용 저역 통과
+min_interval_s = 0.30                # [초안] 걸음 간격 하한
+max_interval_s = 1.50                # [초안] 걸음 간격 상한
+impact_window_s = 0.10               # [초안] 걸음 시각 앞뒤에서 충격 피크를 찾는 창
+
+[sync]
+tol_pct = 3.0                        # [확정] 동조율 기준 ±3%
+tol_alt_pct = 5.0                    # [확정] 5% 기준도 함께 보고
+near_pc_pct = 10.0                   # [확정] 가설 1: 곡 BPM이 PC의 ±10% 안
+r_exclude_low = 98.0                 # [확정] 추종 비율 R은 T가 98–102%이면 뺀다
+r_exclude_high = 102.0
+over_sync_frac = 0.80                # [확정] 일상 보행인데 ±3% 안 걸음이 80% 이상이면 과동조 경고
+
+[music]
+default_offset_s = 3.0               # [초안] 기록 시작부터 첫 곡 재생까지(manifest에 없을 때)
+offset_sensitivity_s = 5.0           # [초안] 오프셋 민감도 분석 폭 ±
+tempo_file_step_bpm = 5              # [확정] 챌린지 음원은 5 BPM 간격
+
+[speed]
+doppler_max_speed_accuracy_ms = 0.5  # [초안] 속도 정확도가 이보다 나쁜 위치 샘플은 뺀다
+section_radius_m = 20.0              # [초안] 측정 구간 시작·끝 통과 판정 반경
+mismatch_tol_pct = 5.0               # [초안] Doppler 중앙값과 구간 통과 속도 차이가 이보다 크면 speed_mismatch
+
+[flight]
+a_thresh_g = 0.2                     # [확정] 가속도 크기 0.2 g 미만
+min_duration_s = 0.030               # [확정] 30 ms 이상
+
+[exp2]
+stage_ratios_pct = [100, 120, 135, 150, 165]   # [확정]
+course_m = 40                        # [확정]
+analysis_m = 30                      # [확정] 가운데 30 m
+central_step_frac = 0.75             # [초안] 영상 창이 없을 때 걸음 열의 가운데 비율
+h1_2_min_sync_frac = 0.80            # [확정] 가설 1-2: 100·120% 단계에서 ±3% 안 걸음 80% 이상
+pc_field_tol_spm = 2.0               # [초안] 기록지 pc_field_spm과 재계산 값 차이 경고 기준
+
+[pendulum]
+k_over_L = 0.560                     # [확정] 엉덩관절 기준 회전반경 / 다리 길이 (계획서 3.6, Winter)
+d_over_L = 0.447                     # [확정] 질량중심 위치 / 다리 길이
+valid_error_pct = 15.0               # [확정] 흔들림 주기 예측-실측 평균 오차 15% 이내면 모델 타당
+gyro_lowpass_hz = 6.0                # [초안 D-24] 흔들림 주기 검출 전 자이로 저역 통과
+
+[stats]
+alpha = 0.05                         # [확정]
+agree_min_persons = 2                # [확정] 3명 중 2명 이상이면 '지지' (가설 4는 3명 모두)
+sd_ddof = 1                          # [초안] 표본 표준편차
+min_n_for_corr = 8                   # [초안 D-23] 구간 수가 이보다 적으면 상관을 판정하지 않는다
+same_tempo_pct = 5.0                 # [초안 D-11] 변동성 비교에서 '같은 템포'로 보는 T 차이(%p)
+froude_walk_run = 0.5                # [확정] 걷기-달리기 전환 Froude 수
+
+[g2]                                 # 11/18 중간 판단용 시나리오 신호
+silent_cv_max_pct = 3.0              # [확정] 무음 케이던스 변동계수 3% 이하
+impact_cv_max_pct = 15.0             # [확정] 같은 조건 회차 간 충격 변동계수 15% 이하
