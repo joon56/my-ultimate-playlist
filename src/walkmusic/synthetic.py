@@ -117,6 +117,8 @@ def make_files(spec: SynthSpec) -> tuple[dict[str, bytes], SynthTruth]:
         between = (t > pre[-1] + 0.3) & (t < walk[0] - 0.3)
         fb[between, :2] = 0.0
     for a, b in ((stand0, stand1), (end0, end1)):  # 서 있는 동안의 작은 흔들림
+        if spec.fidget_bumps == 0 or b - a <= 2:
+            continue
         for tk in rng.uniform(a + 1, b - 1, spec.fidget_bumps):
             sel = np.abs(t - tk) < 0.4
             fb[sel, 2] += spec.fidget_g * np.exp(-0.5 * ((t[sel] - tk) / 0.12) ** 2)
@@ -162,8 +164,8 @@ def make_files(spec: SynthSpec) -> tuple[dict[str, bytes], SynthTruth]:
     lt = np.r_[-14.2, -5.2, 0.05 + np.arange(int(duration))]
     moving = (lt >= t_dep) & (lt <= walk[-1])
     dist = np.cumsum(np.r_[0, np.diff(lt)] * moving * spec.speed_mps)
-    lat = 0.001 + np.degrees(dist / 6371008.8) + np.degrees(rng.normal(0, 0.3, len(lt)) / 6371008.8)
-    lon = 0.001 + np.degrees(rng.normal(0, 0.3, len(lt)) / 6371008.8)
+    lat = 0.001 + np.degrees(dist / 6371008.8) + np.degrees(rng.normal(0, 0.15, len(lt)) / 6371008.8)
+    lon = 0.001 + np.degrees(rng.normal(0, 0.15, len(lt)) / 6371008.8)
     speed = np.where(moving, spec.speed_mps + rng.normal(0, 0.05, len(lt)), 0.0)
     speed[lt < 2.5] = -1.0
     loc = pd.DataFrame({"time": epoch_ns + np.round(lt * 1e9).astype("int64"), "seconds_elapsed": lt,
