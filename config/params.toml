@@ -89,6 +89,7 @@ analysis_m = 30                      # [확정] 가운데 30 m
 central_step_frac = 0.75             # [초안] 영상 창이 없을 때 걸음 열의 가운데 비율
 h1_2_min_sync_frac = 0.80            # [확정] 가설 1-2: 100·120% 단계에서 ±3% 안 걸음 80% 이상
 pc_field_tol_spm = 2.0               # [초안] 기록지 pc_field_spm과 재계산 값 차이 경고 기준
+min_interval_s = 0.25                # [초안 D-45] 실험 2의 걸음 간격 하한·검출 최소 간격(240 spm)
 
 [pendulum]
 k_over_L = 0.560                     # [확정] 엉덩관절 기준 회전반경 / 다리 길이 (계획서 3.6, Winter)
@@ -103,6 +104,7 @@ sd_ddof = 1                          # [초안] 표본 표준편차
 min_n_for_corr = 8                   # [초안 D-23] 구간 수가 이보다 적으면 상관을 판정하지 않는다
 same_tempo_pct = 5.0                 # [초안 D-11] 변동성 비교에서 '같은 템포'로 보는 T 차이(%p)
 froude_walk_run = 0.5                # [확정] 걷기-달리기 전환 Froude 수
+decomp_min_dlnv = 0.03               # [초안 D-50] 속도 분해 기여율을 낼 최소 |Δln v|
 
 [g2]                                 # 11/18 중간 판단용 시나리오 신호
 silent_cv_max_pct = 3.0              # [확정] 무음 케이던스 변동계수 3% 이하
