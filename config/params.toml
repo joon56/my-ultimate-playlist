@@ -34,6 +34,9 @@ stop_gap_s = 2.0                     # [확정] 걸음이 2초 넘게 없으면 
 phone_touch_pad_s = 5                # [초안] 폰을 만진 시각 앞뒤
 stop_pad_s = 2.0                     # [초안 D-19] 정지(걸음 간격 > stop_gap_s) 앞뒤에서 함께 뺄 시간
 min_bout_steps = 10                  # [초안 D-21] 이만큼 이어진 걸음이 있어야 '지속 보행'
+stand_min_s = 8.0                    # [초안 D-36] 서 있기로 보는 최소 길이
+stand_motion_frac = 0.25             # [초안 D-36] 1 s 움직임 지표가 걷는 동안 중앙값의 이 비율 미만이면 가만히 있는 초
+stand_search_s = 120.0               # [초안 D-36] 기록 처음·끝에서 서 있기를 찾는 범위
 
 [orientation]
 lowpass_hz = 0.3                     # [초안 D-22] 걷는 동안 수직 방향(중력 방향) 추정용 저역 통과
@@ -48,6 +51,13 @@ impact_lowpass_hz = 20.0             # [초안] 충격 피크용 저역 통과
 min_interval_s = 0.30                # [초안] 걸음 간격 하한
 max_interval_s = 1.50                # [초안] 걸음 간격 상한
 impact_window_s = 0.10               # [초안] 걸음 시각 앞뒤에서 충격 피크를 찾는 창
+filter_order = 2                     # [초안 D-33] 걸음 검출 대역 통과(Butterworth) 차수
+adaptive_window_s = 2.0              # [초안 D-33] 적응 문턱의 이동 RMS 창
+adaptive_k = 0.5                     # [초안 D-33] 봉우리 높이 ≥ adaptive_k × 이동 RMS
+floor_frac = 0.25                    # [초안 D-33] 높이 하한 = floor_frac × 걷는 동안 이동 RMS 중앙값
+motion_walk_frac = 0.3               # [초안 D-33] 1 s 움직임 지표가 기준의 이 비율보다 크면 '걷는 창'(하한 계산용)
+bout_max_cv_pct = 25.0               # [초안 D-33] 걷기 묶음으로 인정하는 걸음 간격 CV 상한
+bout_min_height_frac = 0.5           # [초안 D-33] 걷기 묶음의 봉우리 높이 중앙값 하한(가장 큰 묶음 대비)
 
 [sync]
 tol_pct = 3.0                        # [확정] 동조율 기준 ±3%
