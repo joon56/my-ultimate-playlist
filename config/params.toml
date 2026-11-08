@@ -56,6 +56,7 @@ adaptive_window_s = 2.0              # [초안 D-33] 적응 문턱의 이동 RMS
 adaptive_k = 0.5                     # [초안 D-33] 봉우리 높이 ≥ adaptive_k × 이동 RMS
 floor_frac = 0.25                    # [초안 D-33] 높이 하한 = floor_frac × 걷는 동안 이동 RMS 중앙값
 motion_walk_frac = 0.3               # [초안 D-33] 1 s 움직임 지표가 기준의 이 비율보다 크면 '걷는 창'(하한 계산용)
+bout_split_frac = 0.4                # [초안 D-33] 묶음 안에서 간격이 중앙값과 이 비율 넘게 다르면 거기서 자른다
 bout_max_cv_pct = 25.0               # [초안 D-33] 걷기 묶음으로 인정하는 걸음 간격 CV 상한
 bout_min_height_frac = 0.5           # [초안 D-33] 걷기 묶음의 봉우리 높이 중앙값 하한(가장 큰 묶음 대비)
 

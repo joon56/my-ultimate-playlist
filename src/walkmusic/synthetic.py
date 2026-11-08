@@ -45,6 +45,7 @@ class SynthSpec:
     stand_end_s: float = 10.0
     post_handling_s: float = 3.0
     fidget_bumps: int = 0
+    fidget_g: float = 0.04             # 서 있을 때 흔들림 크기(실제 파우치 서 있기는 0.08 g 이하)
     fs_hz: float = 99.58
     gaps: tuple[tuple[float, float], ...] = ()
     speed_mps: float = 1.3
@@ -118,7 +119,7 @@ def make_files(spec: SynthSpec) -> tuple[dict[str, bytes], SynthTruth]:
     for a, b in ((stand0, stand1), (end0, end1)):  # 서 있는 동안의 작은 흔들림
         for tk in rng.uniform(a + 1, b - 1, spec.fidget_bumps):
             sel = np.abs(t - tk) < 0.4
-            fb[sel, 2] += 0.12 * np.exp(-0.5 * ((t[sel] - tk) / 0.12) ** 2)
+            fb[sel, 2] += spec.fidget_g * np.exp(-0.5 * ((t[sel] - tk) / 0.12) ** 2)
     fb[:, 2] += 1.0
 
     # 폰 방향: 처음에는 손(파우치 방향에서 70° 기울임), 넣으면 파우치 방향, 끝에 다시 손
