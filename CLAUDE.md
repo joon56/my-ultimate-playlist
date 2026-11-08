@@ -35,13 +35,13 @@
 - 보고 순서: ① 확인한 사실 ② 만든 것 ③ 테스트 결과(출력 그대로) ④ 결정이 필요한 것 ⑤ 다음 단계.
 - 대화를 요약(compact)할 때 남길 것: 현재 Phase와 남은 작업, DECISIONS의 열린 항목, DATA_FACTS 요약, 마지막 테스트 결과, 고친 파일 목록.
 
-## 명령 (Phase 1에서 만든다)
+## 명령 (`pip install -e .[dev]` 뒤, Windows는 `.venv\Scripts\python`)
 
 - `pytest` · `ruff check .`
 - `python -m walkmusic inspect <zip>` — 파일 구조와 시간·샘플링 요약(좌표 출력 없음)
-- `python -m walkmusic qa <zip>` — 품질 검사 Q01–Q15
-- `python -m walkmusic all` — 처리부터 표·그림까지 한 번에(같은 입력이면 같은 출력)
+- `python -m walkmusic qa <zip>` · `qa --all` · `qa --gate G1 [--synthetic]` — 품질 검사 Q01–Q15, 관문 표
+- `python -m walkmusic all` — 처리부터 표·그림까지 한 번에(같은 입력이면 같은 출력). Phase 2에서 만든다
 
 ## 지금 상태
 
-Phase 0 끝(2026-11-07 시범 파일 `TEST_A_1107`, 2026-11-08 A의 사전 점검 3개: DATA_FACTS §10, DECISIONS D-27–D-38). Phase 1은 계획 승인 대기다(`docs/CHECKLIST.md` 부록 A). B·C 사전 점검이 남았다. 실험 1은 11/9부터, 실험 2·3은 11/14다.
+Phase 0 끝(2026-11-07 시범 파일 `TEST_A_1107`, 2026-11-08 A의 사전 점검 3개: DATA_FACTS §10, DECISIONS D-27–D-38). Phase 1 끝(2026-11-08): `inspect`·`qa`(Q01–Q15, `--gate G1`, `--synthetic`), 단위 판별, 걸음 검출 초안, 합성 zip 생성기, §9 테스트. 다음은 Phase 2(곡 구간 지표, PC, 판정, 그림 2·3)이고 계획 승인부터 한다. B·C 사전 점검이 남았다. 실험 1은 11/9부터, 실험 2·3은 11/14다.

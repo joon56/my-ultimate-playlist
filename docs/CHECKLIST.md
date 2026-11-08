@@ -1,6 +1,6 @@
 # CHECKLIST — 할 일과 결정 대기
 
-갱신 2026-11-08 밤(A가 ④ 추천안 승인, Phase 1 시작). 열린 항목만 둔다. 한 줄 = 누구 · 할 일/질문 → 추천. 근거는 '근거'를 펼친다.
+갱신 2026-11-08 밤(Phase 1 끝). 열린 항목만 둔다. 한 줄 = 누구 · 할 일/질문 → 추천. 근거는 '근거'를 펼친다.
 
 - 답은 번호로 준다(예: "K-53 351.2 m"). Claude Code는 답을 받거나 해결·변경되면 항목을 지운다. 결정은 `DECISIONS.md`(새 번호는 D-42부터), 사실은 `DATA_FACTS.md`로 옮긴 뒤 지운다. 지운 번호는 다시 쓰지 않는다.
 - '점검 #n'은 2026-11-07 문서 점검의 번호다. A = 팀장, B = 데이터, C = 곡.
@@ -41,7 +41,7 @@
 - [ ] **K-13** (각자) `participants.csv` → A는 나이·키·체중·폰 기종이 남았고, B·C는 전부(폰 기종은 기기 이름 말고)
 - [ ] **K-14** (B) DECISIONS의 11/9 전 남은 항목 D-04·D-05·D-10·D-13을 확인한다 → 확인 전까지 기본값으로 진행(D-01·D-03·D-31은 11/8 결정)
 
-## Phase 1 중 — Claude Code가 추천안으로 구현, 다르면 알려 주기
+## Phase 1에서 추천안으로 구현함 — 다르면 알려 주기
 
 - [ ] **K-25** (A) QA의 실험 2·3 적용 검사를 표 기준으로 맞춘다 → E2 = Q01–Q03·Q09·Q13, E3 = Q01–Q03·Q09(점검 #1)
   <details><summary>근거</summary>
@@ -125,21 +125,5 @@
 ## 기타
 
 - [ ] **K-51** (A) GitHub 저장소를 비공개로 바꾼 뒤 push 요청 → 2026-11-07 확인 때 공개(public), README·SPEC §11은 비공개만 허용
+- [ ] **K-60** (A) `results/qa_summary.csv`·`results/qa/`를 git에 넣을지 → 추천: `.gitignore`에 넣는다(다시 만들 수 있고, 남길 결과는 G3에서 `results/frozen/`으로 동결한다)
 - [ ] **K-52** (A) `data/raw/`의 zip 4개를 읽기 전용으로 잠근다(README 2단계)
-
-## 부록 A. Phase 1 계획 (2026-11-08 승인, 진행 중 — 끝나면 지운다)
-
-범위 밖: 실험 2·3 파이프라인, 통계·판정, 웹. 단계마다 pytest 출력을 붙이고 작은 한국어 커밋을 한다. 목표 11/11(G1 전날). 확정된 선택: 합성 생성기는 `src/walkmusic/synthetic.py`, §9는 D-41 범위, 단위 판별은 D-30, 3.10은 `tomli`(D-40).
-
-| # | 내용 | 완료 기준 | 테스트 |
-|---|---|---|---|
-| 0 | `.venv`, `pip install -e .[dev]`(numpy·pandas·scipy·matplotlib, pytest·ruff) | 설치 성공 | — |
-| 1 | `pyproject.toml`(src 배치, ruff 설정), `src/walkmusic/{__init__,__main__,cli,config}.py`. config는 params.toml을 SPEC 키 이름 그대로 읽고, 없는 키는 KeyError | `python -m walkmusic --help` 동작, `ruff check .` 0건 | `test_config.py`: 문서에 나온 `섹션.키`가 모두 params.toml에 있는지 자동 대조, 타입 확인 |
-| 2 | 합성 zip 생성기: DATA_FACTS 형식(z·y·x 열, 중력 제외 Accelerometer, Gravity 9.80665, g 단위 Uncalibrated, 좌표 0 근처의 1 Hz Location, 누적 Pedometer, 가짜 기기 이름·ID, 빈 Annotation, 기록 전 위치 점). 매개변수: 케이던스, 잡음·진폭, 폰 방향(세로·가로, D-35), 시작·끝 서 있기와 그 앞뒤 동작, 끊김, 시드. 정답 걸음 시각을 같이 돌려준다 | 같은 시드면 같은 바이트, 생성한 zip이 로더로 읽힘 | `test_synthetic.py` |
-| 3 | `io_sensorlogger.py`와 `inspect`: 풀지 않고 읽기, 열 이름으로 읽기, t_s = (time − epoch) ÷ 1e9(D-28), KST 표시, Location t_s < 0·speed < 0 처리, 빈 파일·모르는 파일은 INFO(D-32), 기기 이름·ID는 읽자마자 버림 | 시범·사전 점검 zip의 `inspect` 출력이 DATA_FACTS §1–3·§10 수치와 같음 | 합성(열 순서 섞기, 끊김, 빈 파일), 실제 파일(있을 때만), 출력에 가짜 좌표·기기 이름이 없는지 |
-| 4 | `units.py`: D-29·D-30 방식으로 단위·중력 포함·부호 판별. 실패하면 예외 → Q09 FAIL | 합성 4종 규약 × 세로·가로, 실제 4개 → m/s², 중력 제외, +1 | `test_units.py` |
-| 5 | `metrics.py` 순수 함수로 §9 예제 수치(D-41)와 배정표 재현 | 모두 통과 | `test_spec_examples.py`, `test_assignment.py` |
-| 6 | `steps.py`: `steps.signal`, 영위상 대역 통과, 최소 간격, 적응 문턱, 봉우리 보간, 걷기 묶음 판정(규칙성·높이, D-33), 출발·도착 = 시작·끝 서 있기(D-36) | 합성 1.5–2.5 Hz 케이던스 오차 ≤ 1%, 걸음 수 ±2, 서 있기 흔들림·폰 넣기·꺼내기 0걸음, ML 축 주 피크 = 걸음 주파수 절반. 실제: 100걸음 파일 100 ± 2, 메트로놈 100 BPM ± 1%, 시범 701–711 s 0걸음, 리허설 t_depart 29.9 ± 1 s·t_arrive 638.9 ± 1 s | `test_steps.py` |
-| 7 | `qa.py`: `qa <zip>`, `--all`, `--gate G1`. Q01–Q15 → `qa_summary.csv`, `qa/<walk_id>.json`. 입력이 없으면 NA | 검사마다 PASS·비PASS 사례, Q15는 좌표를 심은 파일에서 FAIL, `qa --gate G1 --synthetic`이 합성 6회차로 표를 냄 | `test_qa.py` |
-| 8 | 시범·사전 점검 파일 4개 QA 보고 + 걸음 검출 대 직접 센 값·Pedometer. DATA_FACTS §8·§10 갱신 | 보고 표 | 실제 실행 출력 첨부 |
-| 9 | 전체 pytest + ruff, CLAUDE.md '지금 상태' 갱신 | 모두 통과 | 출력 첨부 |
