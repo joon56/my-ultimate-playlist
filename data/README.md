@@ -36,7 +36,7 @@ CSV는 UTF-8(BOM 없음)이다. 구글 시트에서 내려받았을 때 BOM이 �
 
 | 열 | 설명 |
 |---|---|
-| `walk_id` | zip 파일 이름에서 `.zip`을 뺀 것. 예: `E1_B_07_P1_1113`. 시범 측정은 `TEST_A_1107`, 사전 점검은 `TEST_<사람>_<MMDD>_<번호>`(예: `TEST_A_1108_1`, DECISIONS D-39). 시범 파일처럼 zip 이름이 다르면 `zip_file`로 연결한다(D-27) |
+| `walk_id` | 기록지로 붙이는 분석용 이름(한국 날짜). 예: `E1_B_07_P1_1113`. 시범 측정은 `TEST_A_1107`, 사전 점검은 `TEST_<사람>_<MMDD>_<번호>`(예: `TEST_A_1108_1`, DECISIONS D-39). zip은 이름을 바꾸지 않고 올리므로 `zip_file`로 연결한다(D-27, D-42) |
 | `experiment` | `E1` 또는 `TEST` (실험 2·3은 각자의 CSV를 쓴다) |
 | `participant` | A·B·C (보강 참가자는 N1–N4) |
 | `walk_no` | 1–15. 다시 걸은 회차는 16부터 |
