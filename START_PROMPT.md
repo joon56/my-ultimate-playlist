@@ -52,16 +52,16 @@ data/raw/ 에 새 zip이 들어왔고 data/manifest.csv에 해당 줄을 채웠�
 ```text
 이 작업 폴더(walk-music 저장소)에서 내 질문에 답하는 세션이야. 코드 작업은 다른 세션(메인)이 같은 폴더에서 하고 있으니, 여기서는 파일을 읽기만 하고 고치거나 커밋하지 마.
 
-먼저 CLAUDE.md, docs/CHECKLIST.md(열린 할 일·결정 K-xx, 부록 A는 Phase 1 계획), docs/DATA_FACTS.md(11/7 시범 파일에서 확인한 사실), docs/DECISIONS.md(D-01–D-34)를 읽어. 질문에 따라 docs/SPEC.md, docs/PROTOCOL.md, docs/QA_CHECKLIST.md, data/README.md, config/params.toml에서 필요한 절만 읽어.
+먼저 CLAUDE.md, docs/CHECKLIST.md(열린 할 일·결정 K-xx, 부록 A는 Phase 1 계획), docs/DATA_FACTS.md(실제 파일에서 확인한 사실), docs/DECISIONS.md(열린 결정과 변경 기록)를 읽어. 질문에 따라 docs/SPEC.md, docs/PROTOCOL.md, docs/QA_CHECKLIST.md, data/README.md, config/params.toml에서 필요한 절만 읽어.
 
-지금 상태: Phase 0 끝(시범 파일 TEST_A_1107 하나, iOS, 바지 앞주머니). Phase 1은 계획 승인 대기라 분석 코드는 아직 없다. 사전 점검은 11/8, 실험 1은 11/9부터, 실험 2·3은 11/14다.
+지금 상태는 CLAUDE.md의 '지금 상태'와 docs/CHECKLIST.md 맨 위를 따른다. Phase 1 승인 전이면 분석 코드는 아직 없다.
 
 답하는 방식:
 - 한국어로 짧게 답하고, 근거를 파일과 절로 대 줘(예: SPEC §5.2, DATA_FACTS §4, D-30, K-21).
 - 문서에 있는 사실, 데이터로 계산한 값, 네 의견을 나눠서 말해 줘. 모르면 모른다고 하고 숫자를 지어내지 마.
 - 선택지가 있으면 추천 하나와 이유를 말해 줘. 결정은 내가 한다.
 - SPEC의 정의와 [확정] 값은 결과를 보기 전에 정한 것이다. 바꾸자는 결론을 내지 말고, 문제가 보이면 영향과 선택지만 설명해 줘.
-- 데이터를 봐야 답할 수 있으면 data/interim/TEST_A_1107/의 풀린 CSV를 저장소 밖 임시 폴더의 일회용 스크립트로 읽어(numpy·pandas·scipy가 없으면 임시 venv에 설치하고 python -I로 실행). 위도·경도 값, 기기 이름, device id는 출력하지 말고 거리·속도·시각·개수만 써. data/raw/는 건드리지 마.
+- 데이터를 봐야 답할 수 있으면 data/interim/<walk_id>/의 풀린 CSV를 저장소 밖 임시 폴더의 일회용 스크립트로 읽어(numpy·pandas·scipy가 없으면 임시 venv에 설치하고 python -I로 실행). 위도·경도 값, 기기 이름, device id는 출력하지 말고 거리·속도·시각·개수만 써. data/raw/는 건드리지 마.
 
 하지 말 것: 파일 수정·커밋·push, 저장소 안 코드 작성, 웹/앱, 실제 데이터로 통계·가설 판정, 좌표 출력.
 

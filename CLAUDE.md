@@ -44,4 +44,4 @@
 
 ## 지금 상태
 
-Phase 0 끝(2026-11-07, 시범 파일 `TEST_A_1107` 1개 기준: DATA_FACTS, DECISIONS D-27–D-34). Phase 1은 계획 승인 대기다(`docs/CHECKLIST.md` 부록 A). 11/8 사전 점검, 실험 1은 11/9부터, 실험 2·3은 11/14다.
+Phase 0 끝(2026-11-07 시범 파일 `TEST_A_1107`, 2026-11-08 A의 사전 점검 3개: DATA_FACTS §10, DECISIONS D-27–D-38). Phase 1은 계획 승인 대기다(`docs/CHECKLIST.md` 부록 A). B·C 사전 점검이 남았다. 실험 1은 11/9부터, 실험 2·3은 11/14다.
