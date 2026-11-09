@@ -46,7 +46,7 @@ CSV는 UTF-8(BOM 없음)이다. 구글 시트에서 내려받았을 때 BOM이 �
 | `redo_of` | 다시 걸은 회차가 대신하는 원래 회차 번호. 아니면 비움 |
 | `date` | 걸은 날 |
 | `start_time` | 기록을 시작한 시각(시:분). zip의 기록 시작 시각과 맞추는 데 쓰므로 정확히 적는다. 파일 이름의 시각은 UTC라 베끼지 않는다 |
-| `condition` | S, P1–P4. 사전 점검(`TEST`)은 `rehearsal`(10분 리허설) 또는 `steps100`(100걸음) |
+| `condition` | S, P1–P4. 사전 점검(`TEST`)은 `rehearsal`(10분 리허설) 또는 `steps100`(100걸음). A의 11/8 메트로놈 점검은 `metronome` |
 | `start_song` | 처음 튼 곡 1–3. 무음은 비움 |
 | `direction` | 가는 길 / 오는 길 |
 | `weather` | 맑음 / 흐림 / 비 |

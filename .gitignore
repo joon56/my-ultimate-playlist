@@ -14,6 +14,8 @@ data/private/*
 
 # 다시 만들 수 있는 결과
 results/figures/
+results/qa/
+results/qa_summary.csv
 results/steps/
 results_synthetic/
 

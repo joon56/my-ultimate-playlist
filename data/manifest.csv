@@ -1,5 +1,5 @@
 walk_id,experiment,participant,walk_no,redo_of,date,start_time,condition,start_song,direction,weather,temp_c,bag,hurried,music_offset_s,songs_played,hand_step_count,hand_step_note,zip_file,status,notes
 TEST_A_1107,TEST,A,,,2026-11-07,20:20,,,,,,,,,,,,_1271-10-2026-11-07_11-20-44.zip,test,"시범 측정: 산책, 화면 끄고 기록, 조건 없음. 바지 앞주머니. start_time은 Metadata 기록 시작(KST)"
-TEST_A_1108_1,TEST,A,,,2026-11-08,19:29,,,,,,,,,,,,TEST_A_1108_1.zip,test,사전 점검 ① 리허설(PROTOCOL 2.5). 허리 파우치(등 쪽)·가로. 음악은 시작 10초 서 있는 동안 헤드셋으로 재생(정확한 초 모름). 측정 구간 통과 시각 메모 없음. 폰은 기록 시작·끝에만 만짐
-TEST_A_1108_2,TEST,A,,,2026-11-08,19:42,,,,,,,,,,100,시작·끝 10초 서 있기 사이를 셈,TEST_A_1108_2.zip,test,사전 점검 ② 100걸음 직접 셈
-TEST_A_1108_3,TEST,A,,,2026-11-08,19:47,,,,,,,,,,,,TEST_A_1108_3.zip,test,사전 점검 ③ 메트로놈 100 BPM 약 3–4분
+TEST_A_1108_1,TEST,A,,,2026-11-08,19:29,rehearsal,,,,,,,,,,,TEST_A_1108_1.zip,test,사전 점검 ① 리허설(PROTOCOL 2.5). 허리 파우치(등 쪽)·가로. 음악은 시작 10초 서 있는 동안 헤드셋으로 재생(정확한 초 모름). 측정 구간 통과 시각 메모 없음. 폰은 기록 시작·끝에만 만짐
+TEST_A_1108_2,TEST,A,,,2026-11-08,19:42,steps100,,,,,,,,,100,시작·끝 10초 서 있기 사이를 셈,TEST_A_1108_2.zip,test,사전 점검 ② 100걸음 직접 셈
+TEST_A_1108_3,TEST,A,,,2026-11-08,19:47,metronome,,,,,,,,,,,TEST_A_1108_3.zip,test,사전 점검 ③ 메트로놈 100 BPM 약 3–4분
