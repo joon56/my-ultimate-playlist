@@ -1,6 +1,7 @@
 """품질 검사 Q01–Q15와 관문 G1 (QA_CHECKLIST, SPEC §7).
 
-결과: <results>/qa_summary.csv(회차×검사), <results>/qa/<walk_id>.json(상세), 관문은 <results>/gate_G1.csv.
+결과: <results>/qa_summary.csv(회차×검사), <results>/qa/<walk_id>.json(상세), 관문은 <results>/gate_G1.csv,
+zip 연결 제안은 <results>/zip_links.csv(D-27).
 코드는 FAIL이어도 파일을 지우거나 분석에서 빼지 않는다. 좌표 값과 기기 이름은 어디에도 쓰지 않는다.
 합성 데이터는 results_synthetic/에만 쓴다.
 """
@@ -17,6 +18,7 @@ import pandas as pd
 
 from walkmusic.config import ROOT, Params, load_params
 from walkmusic.io_sensorlogger import Recording, interval_stats, read_zip
+from walkmusic.links import expected_walk_id, fill_walk_ids, find_zip, sheet_time, write_zip_links
 from walkmusic.orientation import angle_deg, median_direction
 from walkmusic.steps import StepResult, analyze_recording, cadence_summary
 from walkmusic.units import Units, UnitsError
@@ -95,11 +97,9 @@ def experiment_of(row: dict) -> str:
 
 def analyze_walk(row: dict, paths: Paths, params: Params) -> Walk:
     """manifest 한 줄 → zip 읽기, 단위 판별, 걸음 검출."""
-    wid = row["walk_id"]
-    zip_name = row.get("zip_file") or f"{wid}.zip"
-    w = Walk(wid, row, paths.raw / zip_name)
+    w = Walk(row["walk_id"], row, find_zip(paths.raw, row))
     if not w.zip_path.exists():
-        w.error = f"zip 없음: {zip_name}"
+        w.error = f"zip 없음: {w.zip_path.name}"
         return w
     w.rec = read_zip(w.zip_path, params)
     try:
@@ -214,7 +214,7 @@ def check_walk(w: Walk, tables: dict[str, pd.DataFrame], params: Params) -> list
             f"검출 {det} / 직접 {hand}", f"±{params['qa.hand_count_tol_steps']}", f"창 {win[0]:.1f}–{win[1]:.1f} s")
     else:
         add("Q06", "NA", f"검출 {det}", note="직접 센 값 없음")
-    # Q07 Pedometer(D-30 열림: 직접 센 값과 크게 다를 수 있다)
+    # Q07 Pedometer(D-30 확정: 참고값이라 차이가 커도 INFO)
     if exp in ("E1", "T") and rec.has("Pedometer"):
         pt, pv = rec.t("Pedometer"), rec.sensors["Pedometer"]["steps"].to_numpy(float)
         inside = np.where((pt >= win[0]) & (pt <= win[1]))[0]
@@ -223,7 +223,7 @@ def check_walk(w: Walk, tables: dict[str, pd.DataFrame], params: Params) -> list
             ped = pv[inside[-1]] - pv[inside[0]]
             d7 = len(stp.window_steps(ua, ub))
             rel = (d7 - ped) / ped * 100 if ped else float("nan")
-            add("Q07", "PASS" if abs(rel) <= params["qa.pedometer_tol_pct"] else "WARN",
+            add("Q07", "PASS" if abs(rel) <= params["qa.pedometer_tol_pct"] else "INFO",
                 f"검출 {d7} / Pedometer {ped:.0f} ({rel:+.1f}%)", f"±{params['qa.pedometer_tol_pct']}%",
                 f"갱신 {ua:.1f}–{ub:.1f} s. D-30: Pedometer는 기준이 아니다")
         else:
@@ -251,11 +251,15 @@ def check_walk(w: Walk, tables: dict[str, pd.DataFrame], params: Params) -> list
     else:
         add("Q08a", "NA")
         add("Q08b", "NA")
-    # Q10 파일 이름 ↔ manifest, Q11 배정표, Q12 곡 타임라인
-    if exp == "E1":
-        out += _q10_q12(w, tables)
+    # Q10 zip ↔ manifest 연결(E1·T), Q11 배정표, Q12 곡 타임라인(E1)
+    if exp in ("E1", "T"):
+        out.append(_q10(w, tables, params))
     else:
-        for cid in ("Q10", "Q11", "Q12"):
+        add("Q10", "NA", note="E1·T만 판정")
+    if exp == "E1":
+        out += _q11_q12(w, tables)
+    else:
+        for cid in ("Q11", "Q12"):
             add(cid, "NA", note="E1만 판정")
     # Q13 유효 걸음
     cs = cadence_summary(stp, params)
@@ -268,15 +272,36 @@ def check_walk(w: Walk, tables: dict[str, pd.DataFrame], params: Params) -> list
     return out
 
 
-def _q10_q12(w: Walk, tables: dict[str, pd.DataFrame]) -> list[Check]:
+def _q10(w: Walk, tables: dict[str, pd.DataFrame], params: Params) -> Check:
+    """Q10 zip ↔ manifest(D-27): 기록 시작 시각 ↔ 기록지 시각, zip 하나에 줄 하나, walk_id 규칙."""
+    row, wid, exp, tol = w.row, w.walk_id, experiment_of(w.row), params["manifest.start_time_tol_s"]
+    p, date = row.get("participant", ""), row.get("date", "")
+    probs = []
+    want = expected_walk_id(row)
+    if exp == "E1" and wid != want:
+        probs.append(f"walk_id가 규칙({want})과 다르다")
+    if exp == "T" and not re.fullmatch(rf"TEST_{re.escape(p)}_{date[5:7]}{date[8:10]}(_.+)?", wid):
+        probs.append(f"walk_id가 TEST_{p}_<MMDD>_<종류>가 아니다")
+    man = tables.get("manifest", pd.DataFrame())
+    if len(man):
+        same = man[(man["zip_file"] == w.zip_path.name) & (man["participant"] == p)]
+        if len(same) > 1:
+            probs.append(f"같은 zip을 쓰는 manifest 줄이 {len(same)}개")
+    t_sheet, value = sheet_time(row, params["time.timezone"]), ""
+    if t_sheet is None:
+        if exp == "T" and not probs:
+            return Check(wid, "Q10", "NA", "", f"±{tol} s", "start_time이 비었다: 기록지의 시작 시각을 채운다")
+        probs.append("start_time이 비었다")
+    else:
+        diff = (w.rec.kst(0) - t_sheet).total_seconds()
+        value = f"{diff:+.0f} s"
+        if abs(diff) > tol:
+            probs.append(f"기록 시작 {w.rec.kst(0):%H:%M:%S}과 기록지 {row.get('start_time')}의 차이가 크다")
+    return Check(wid, "Q10", "FAIL" if probs else "PASS", value, f"±{tol} s", "; ".join(probs))
+
+
+def _q11_q12(w: Walk, tables: dict[str, pd.DataFrame]) -> list[Check]:
     row, wid, out = w.row, w.walk_id, []
-    m = re.fullmatch(r"E1_([A-Z]\d?)_(\d{2})_(S|P[1-4])_(\d{4})", wid)
-    mmdd = row.get("date", "")[5:7] + row.get("date", "")[8:10]
-    zip_stem = (row.get("zip_file") or f"{wid}.zip")[:-4]
-    ok = bool(m) and m.group(1) == row.get("participant") and int(m.group(2)) == int(row.get("walk_no") or -1) \
-        and m.group(3) == row.get("condition") and m.group(4) == mmdd and zip_stem == wid
-    out.append(Check(wid, "Q10", "PASS" if ok else "FAIL", zip_stem, "E1_<사람>_<회차>_<조건>_<MMDD>",
-                     "" if ok else "이름과 manifest(사람·회차·조건·날짜·zip_file)가 다르다"))
     asg = tables["assignment"]
     wn = int(row.get("redo_of") or row.get("walk_no") or -1)
     a = asg[(asg["participant"] == row.get("participant")) & (asg["walk_no"].astype(int) == wn)]
@@ -368,7 +393,8 @@ def _walk_json(w: Walk) -> dict:
 def run_checks(rows: list[dict], paths: Paths, params: Params) -> tuple[list[Check], list[Walk]]:
     """manifest 줄들을 검사하고 결과 파일을 쓴다."""
     tables = {"assignment": read_table(paths.assignment), "music": read_table(paths.music),
-              "participants": read_table(paths.participants), "sections": read_table(paths.sections)}
+              "participants": read_table(paths.participants), "sections": read_table(paths.sections),
+              "manifest": read_table(paths.manifest)}
     walks = [analyze_walk(r, paths, params) for r in rows]
     checks = [c for w in walks for c in check_walk(w, tables, params)]
     checks += cross_checks(walks, params)
@@ -387,14 +413,27 @@ def run_checks(rows: list[dict], paths: Paths, params: Params) -> tuple[list[Che
     return checks, walks
 
 
+def criteria_fixed(path: Path = ROOT / "docs" / "DECISIONS.md", ids=("D-33", "D-34", "D-35", "D-36")) -> str:
+    """관문 G1 '결과 전 기준': DECISIONS 표에서 네 항목의 상태가 모두 '확정'이면 PASS."""
+    if not path.exists():
+        return "NA"
+    status = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^\| (D-\d+) \|", line)
+        if m:
+            status[m.group(1)] = line.rstrip().rstrip("|").rsplit("|", 1)[-1].strip()
+    return "PASS" if all(status.get(i, "").startswith("확정") for i in ids) else "FAIL"
+
+
 def gate_g1(checks: list[Check], manifest: pd.DataFrame) -> pd.DataFrame:
-    """관문 G1 표(사람 × 항목, QA_CHECKLIST §3). 100걸음은 사전 점검 파일로 본다(D-27)."""
+    """관문 G1 표(사람 × 항목, QA_CHECKLIST §3). 100걸음은 사전 점검의 steps100 기록으로 본다(D-27)."""
     by = {(c.walk_id, c.check_id): c.status for c in checks}
+    criteria = criteria_fixed()
     rows = []
     for p in sorted({r for r in manifest.get("participant", []) if r}):
         m = manifest[manifest["participant"] == p]
         e1 = m[(m["experiment"] == "E1") & (m["walk_no"].isin(["1", "2"]))]["walk_id"].tolist()
-        tests = m[(m["experiment"] == "TEST") & (m["hand_step_count"].str.strip() != "")]["walk_id"].tolist()
+        tests = m[(m["experiment"] == "TEST") & (m["condition"] == "steps100")]["walk_id"].tolist()
 
         def all_pass(ids, cids):
             if not ids:
@@ -404,31 +443,40 @@ def gate_g1(checks: list[Check], manifest: pd.DataFrame) -> pd.DataFrame:
 
         rows.append(dict(participant=p, first_data=f"{len(e1)}/2", background=all_pass(e1, ["Q03", "Q04"]),
                          hand_100=all_pass(tests, ["Q06"]), gps=all_pass(e1, ["Q08a"]),
-                         names_assignment_units=all_pass(e1, ["Q10", "Q11", "Q09"])))
+                         names_assignment_units=all_pass(e1, ["Q10", "Q11", "Q09"]), pre_result_criteria=criteria))
     return pd.DataFrame(rows)
 
 
 def make_synthetic_dataset(paths: Paths, params: Params) -> None:
-    """관문 G1 연습용 합성 자료: A·B·C의 1–2회차(배정표 조건)와 100걸음 사전 점검 파일."""
+    """관문 G1 연습용 합성 자료: A·B·C의 1–2회차(배정표 조건)와 100걸음 사전 점검(steps100) 파일.
+
+    zip은 raw/<사람>/에 두고, 기록 시작 시각은 기록지 시각 + 20 s다(D-27).
+    """
     from walkmusic.synthetic import SynthSpec, write_zip
 
-    paths.raw.mkdir(parents=True, exist_ok=True)
+    def epoch_ms(date: str, hhmm: str) -> int:
+        return int(sheet_time(dict(date=date, start_time=hhmm), params["time.timezone"]).value // 10**6) + 20_000
+
     (paths.sections.parent).mkdir(parents=True, exist_ok=True)
     asg = read_table(paths.assignment)
     rows, seed = [], 0
     for p in ("A", "B", "C"):
-        for wn, day in ((1, "09"), (2, "10")):
+        (paths.raw / p).mkdir(parents=True, exist_ok=True)
+        for wn, day, hhmm in ((1, "09", "08:30"), (2, "10", "08:35")):
             a = asg[(asg["participant"] == p) & (asg["walk_no"] == str(wn))].iloc[0]
-            wid = f"E1_{p}_{wn:02d}_{a['condition']}_11{day}"
+            wid, date = f"E1_{p}_{wn:02d}_{a['condition']}_11{day}", f"2026-11-{day}"
             seed += 1
-            write_zip(paths.raw / f"{wid}.zip", SynthSpec(walk_s=500, cadence_spm=105 + 5 * seed % 15, seed=seed))
-            rows.append(dict(walk_id=wid, experiment="E1", participant=p, walk_no=str(wn), date=f"2026-11-{day}",
-                             condition=a["condition"], start_song=a["start_song"], zip_file=f"{wid}.zip"))
-        wid = f"TEST_{p}_1108_2"
+            write_zip(paths.raw / p / f"{wid}.zip", SynthSpec(walk_s=500, cadence_spm=105 + 5 * seed % 15, seed=seed,
+                                                              epoch_ms=epoch_ms(date, hhmm)))
+            rows.append(dict(walk_id=wid, experiment="E1", participant=p, walk_no=str(wn), date=date,
+                             start_time=hhmm, condition=a["condition"], start_song=a["start_song"],
+                             zip_file=f"{wid}.zip"))
+        wid = f"TEST_{p}_1108_steps100"
         seed += 1
-        write_zip(paths.raw / f"{wid}.zip", SynthSpec(n_walk_steps=100, cadence_spm=100, seed=seed))
-        rows.append(dict(walk_id=wid, experiment="TEST", participant=p, date="2026-11-08", hand_step_count="100",
-                         zip_file=f"{wid}.zip", status="test"))
+        write_zip(paths.raw / p / f"{wid}.zip", SynthSpec(n_walk_steps=100, cadence_spm=100, seed=seed,
+                                                          epoch_ms=epoch_ms("2026-11-08", "19:00")))
+        rows.append(dict(walk_id=wid, experiment="TEST", participant=p, date="2026-11-08", start_time="19:00",
+                         condition="steps100", hand_step_count="100", zip_file=f"{wid}.zip", status="test"))
     cols = read_table(ROOT / "data" / "manifest.csv").columns.tolist()
     man = pd.DataFrame(rows).reindex(columns=cols, fill_value="").fillna("")
     man.to_csv(paths.manifest, index=False, lineterminator="\n")
@@ -444,14 +492,26 @@ def make_synthetic_dataset(paths: Paths, params: Params) -> None:
         paths.sections, index=False, lineterminator="\n")
 
 
-def run_cli(zip_path: Path | None, walk: str | None, all_walks: bool, gate: str | None, synthetic: bool) -> int:
-    """`python -m walkmusic qa` 처리. 결과 요약을 출력하고 FAIL이 있으면 1."""
+def _print_links(df: pd.DataFrame, path: Path) -> None:
+    print(f"zip 연결 제안 {len(df)}개 → {path} (manifest는 고치지 않는다. 확인 뒤 zip_file을 채운다)")
+    for r in df.itertuples():
+        print(f"{r.participant} | {r.zip_name} | 시작 {r.start_kst} | {r.status} | {r.walk_id} | {r.diff_s} s")
+
+
+def run_cli(zip_path: Path | None, walk: str | None, all_walks: bool, gate: str | None, synthetic: bool,
+            links: bool = False) -> int:
+    """`python -m walkmusic qa` 처리. 결과 요약을 출력하고 FAIL이 있으면 1. --links는 연결 제안만."""
     params = load_params()
     paths = Paths.synthetic() if synthetic else Paths.real()
     if synthetic and not paths.manifest.exists():
         make_synthetic_dataset(paths, params)
-    manifest = read_table(paths.manifest)
-    rows = manifest.to_dict("records")
+    if links or all_walks or gate:
+        _print_links(write_zip_links(paths.manifest, paths.raw, paths.results, params),
+                     paths.results / "zip_links.csv")
+        if links and not (all_walks or gate or zip_path or walk):
+            return 0
+    rows = fill_walk_ids(read_table(paths.manifest).to_dict("records"))
+    manifest = pd.DataFrame(rows)
     if zip_path is not None:
         name = Path(zip_path).name
         rows = [r for r in rows if r.get("zip_file") == name or f"{r['walk_id']}.zip" == name]

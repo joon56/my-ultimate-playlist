@@ -24,6 +24,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p_qa.add_argument("--all", action="store_true", help="manifest의 모든 회차")
     p_qa.add_argument("--gate", choices=["G1"], help="관문 표를 만든다(모든 회차 QA 뒤)")
     p_qa.add_argument("--synthetic", action="store_true", help="합성 데이터로(results_synthetic/에만 쓴다)")
+    p_qa.add_argument("--links", action="store_true",
+                      help="data/raw/<사람>/의 zip을 기록지 시각과 맞춘 연결 제안(results/zip_links.csv)만 낸다")
     return ap
 
 
@@ -44,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
         from walkmusic.qa import run_cli
 
         return run_cli(zip_path=args.zip, walk=args.walk, all_walks=args.all, gate=args.gate,
-                       synthetic=args.synthetic)
+                       synthetic=args.synthetic, links=args.links)
     return 2  # pragma: no cover
 
 

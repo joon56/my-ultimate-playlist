@@ -16,6 +16,8 @@ data/private/*
 results/figures/
 results/qa/
 results/qa_summary.csv
+results/zip_links.csv
+results/gate_G1.csv
 results/steps/
 results_synthetic/
 

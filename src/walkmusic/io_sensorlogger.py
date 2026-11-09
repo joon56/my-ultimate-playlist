@@ -67,6 +67,31 @@ def _epoch_from_meta(meta: dict[str, str]) -> int | None:
     return None if scale is None else v * scale
 
 
+def read_start_epoch(path: str | Path) -> tuple[int, str]:
+    """기록 시작 시각(ns, UTC)과 출처만 빠르게 읽는다(zip 연결용, D-27·D-43). 센서 표는 읽지 않는다."""
+    with zipfile.ZipFile(path) as z:
+        infos = {Path(i.filename).name[:-4]: i for i in z.infolist() if i.filename.endswith(".csv")}
+        if "Metadata" in infos:
+            text = z.read(infos["Metadata"])
+            mdf = pd.read_csv(io.BytesIO(text), dtype=str, keep_default_na=False) if text.strip() else pd.DataFrame()
+            if len(mdf):
+                epoch = _epoch_from_meta({k: str(mdf.iloc[0][k]) for k in SAFE_META if k in mdf.columns})
+                if epoch is not None:
+                    return epoch, "metadata"
+        firsts = []
+        for name in IMU_EPOCH:
+            if name in infos:
+                with z.open(infos[name]) as f:
+                    head = f.readline().decode("utf-8").strip().split(",")
+                    first = f.readline().decode("utf-8").strip().split(",")
+                if "time" in head and len(first) == len(head):
+                    v = first[head.index("time")]
+                    firsts.append(int(v) if v.lstrip("-").isdigit() else int(float(v)))
+    if not firsts:
+        raise ValueError(f"{Path(path).name}: 기록 시작 시각을 정할 수 없다(Metadata·IMU 없음)")
+    return min(firsts), "imu_first"
+
+
 def read_zip(path: str | Path, params: Params | None = None) -> Recording:
     """Sensor Logger zip을 읽어 :class:`Recording`으로 돌려준다."""
     params = params or load_params()

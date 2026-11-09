@@ -1,6 +1,7 @@
 """QA Q01–Q15와 관문 G1: 검사마다 PASS 사례와 아닌 사례(합성), 실제 파일 요약."""
 
 import io
+from dataclasses import replace
 
 import numpy as np
 import pandas as pd
@@ -11,17 +12,32 @@ from walkmusic.qa import R_EARTH, Paths, gate_g1, make_synthetic_dataset, read_t
 from walkmusic.synthetic import SynthSpec, make_files, write_zip
 
 COLS = read_table(ROOT / "data" / "manifest.csv").columns.tolist()
+DEFAULT_EPOCH = SynthSpec().epoch_ms
+
+
+def kst_ms(date, hhmm, sec=0):
+    return int(pd.Timestamp(f"{date} {hhmm}", tz="Asia/Seoul").value // 10**6) + sec * 1000
 
 
 def _env(tmp_path, walks, distance="200", music_duration="180"):
-    """walks: [(manifest 줄 dict, SynthSpec)] → 임시 Paths."""
+    """walks: [(manifest 줄 dict, SynthSpec 또는 None)] → 임시 Paths.
+
+    zip은 data/raw/<사람>/에 둔다. 기록 시작 시각을 따로 주지 않으면 기록지 시각 + 20 s로 맞춘다(D-27).
+    extra_files로 바꾼 표는 기본 시각으로 만든 것이라 그때는 시각을 바꾸지 않는다.
+    spec이 None이면 zip을 만들지 않는다(다른 줄의 zip_file을 같이 쓰는 경우).
+    """
     paths = Paths(tmp_path / "raw", tmp_path / "manifest.csv", ROOT / "data" / "assignment.csv",
                   tmp_path / "music.csv", tmp_path / "participants.csv", tmp_path / "sections.csv", tmp_path / "out")
     paths.raw.mkdir()
     rows = []
     for row, spec in walks:
-        write_zip(paths.raw / f"{row['walk_id']}.zip", spec)
-        rows.append({**row, "zip_file": f"{row['walk_id']}.zip"})
+        name = row.get("zip_file") or f"{row['walk_id']}.zip"
+        if spec is not None:
+            if spec.epoch_ms == DEFAULT_EPOCH and row.get("start_time") and not spec.extra_files:
+                spec = replace(spec, epoch_ms=kst_ms(row["date"], row["start_time"], 20))
+            (paths.raw / row["participant"]).mkdir(exist_ok=True)
+            write_zip(paths.raw / row["participant"] / name, spec)
+        rows.append({**row, "zip_file": name})
     pd.DataFrame(rows).reindex(columns=COLS, fill_value="").fillna("").to_csv(paths.manifest, index=False)
     mus = read_table(ROOT / "data" / "music_bpm.csv")
     mus["duration_s"] = music_duration
@@ -39,8 +55,30 @@ def _status(checks, wid, cid):
     return {(c.walk_id, c.check_id): c.status for c in checks}[(wid, cid)]
 
 
-E1 = dict(experiment="E1", participant="A", walk_no="1", date="2026-11-09", condition="S", start_song="")
+E1 = dict(experiment="E1", participant="A", walk_no="1", date="2026-11-09", start_time="08:30", condition="S",
+          start_song="")
 GOOD = dict(walk_s=500, seed=11)
+
+
+def test_q10_start_time_one_to_one_and_names(tmp_path, params):
+    """Q10(D-27): 기록 시작 시각 ↔ 기록지 시각, zip 하나에 줄 하나, walk_id 규칙. T는 시각이 없으면 NA."""
+    short = dict(walk_s=30)
+    walks = [
+        ({**E1, "walk_id": "E1_A_01_S_1109"}, SynthSpec(**short, seed=31)),
+        ({**E1, "walk_id": "E1_A_02_P1_1109", "walk_no": "2", "condition": "P1", "start_song": "2"},
+         SynthSpec(**short, seed=32, epoch_ms=kst_ms("2026-11-09", "08:33"))),  # 기록지보다 3분 늦게 시작
+        ({**E1, "walk_id": "E1_A_03_P2_1109", "walk_no": "3", "condition": "P2", "start_song": "1"},
+         SynthSpec(**short, seed=33)),
+        ({**E1, "walk_id": "E1_A_04_P3_1109", "walk_no": "4", "condition": "P3", "start_song": "1",
+          "zip_file": "E1_A_03_P2_1109.zip"}, None),  # 3번 줄과 같은 zip
+        (dict(walk_id="TEST_A_1110_steps100", experiment="TEST", participant="A", date="2026-11-10",
+              condition="steps100", hand_step_count="100"), SynthSpec(**short, seed=34)),  # 기록지 시각 없음
+    ]
+    paths, rows = _env(tmp_path, walks)
+    checks, _ = run_checks(rows, paths, params)
+    q10 = {c.walk_id: c.status for c in checks if c.check_id == "Q10"}
+    assert q10 == {"E1_A_01_S_1109": "PASS", "E1_A_02_P1_1109": "FAIL", "E1_A_03_P2_1109": "FAIL",
+                   "E1_A_04_P3_1109": "FAIL", "TEST_A_1110_steps100": "NA"}
 
 
 def test_good_e1_walk_passes(tmp_path, params):
@@ -76,7 +114,7 @@ def test_failures_and_warnings(tmp_path, params):
     s = lambda w, c: _status(checks, w, c)  # noqa: E731
     assert s("E1_A_01_S_1109", "Q04") == "FAIL" and s("E1_A_01_S_1109", "Q06") == "FAIL"
     assert s("E1_A_01_S_1109", "Q08b") == "WARN"
-    assert s("E1_A_02_P1_1110", "Q02") == "FAIL" and s("E1_A_02_P1_1110", "Q07") == "WARN"
+    assert s("E1_A_02_P1_1110", "Q02") == "FAIL" and s("E1_A_02_P1_1110", "Q07") == "INFO"  # D-30: 참고값
     assert s("E1_A_02_P1_1110", "Q10") == "FAIL" and s("E1_A_02_P1_1110", "Q11") == "FAIL"
     assert s("E1_A_02_P1_1110", "Q12") == "FAIL"  # duration_s가 비었다
     assert s("E1_A_03_P2_1109", "Q03") == "FAIL" and s("E1_A_03_P2_1109", "Q05") == "WARN"
@@ -111,6 +149,9 @@ def test_synthetic_gate_g1_all_pass(tmp_path, params):
     assert (g["first_data"] == "2/2").all()
     for col in ("background", "hand_100", "gps", "names_assignment_units"):
         assert (g[col] == "PASS").all(), col
+    assert (g["pre_result_criteria"] == "PASS").all()  # DECISIONS D-33–D-36이 확정
+    assert (manifest["start_time"] != "").all() and set(manifest["condition"]) >= {"steps100"}
+    assert all((s.raw / r["participant"] / r["zip_file"]).exists() for r in manifest.to_dict("records"))
     assert _status(checks, "ALL", "Q15") == "PASS"
 
 
