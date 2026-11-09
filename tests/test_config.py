@@ -35,6 +35,6 @@ def test_doc_keys_exist_in_params():
     for doc in DOCS:
         text = (ROOT / doc).read_text(encoding="utf-8")
         for sec, key in re.findall(r"`([a-z0-9_]+)\.([A-Za-z0-9_]+)`", text):
-            if sec in sections and f"{sec}.{key}" not in p:
+            if sec in sections and key not in {"csv", "md", "json", "toml", "png", "zip"} and f"{sec}.{key}" not in p:
                 missing.append(f"{doc}: {sec}.{key}")
     assert not missing, missing
