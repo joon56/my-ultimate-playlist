@@ -13,7 +13,7 @@ from typing import Any
 
 if sys.version_info >= (3, 11):
     import tomllib
-else:  # pragma: no cover - DECISIONS D-40
+else:  # pragma: no cover - DECISIONS D-52
     import tomli as tomllib
 
 #: 저장소 루트(src 배치: src/walkmusic/config.py → 두 단계 위)

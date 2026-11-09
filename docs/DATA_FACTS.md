@@ -32,8 +32,9 @@ Phase 0에서 시범 측정 zip을 열어 채운다. '문서로 아는 것'은 S
 | Gyroscope.csv | 같음 | 있음. 같은 열 · 71,588행 | 결측 0, 순증가 |
 | Location.csv | latitude, longitude, altitude, speed, speedAccuracy, bearing, bearingAccuracy, horizontalAccuracy, verticalAccuracy | 있음. `time, seconds_elapsed, altitude, speedAccuracy, bearingAccuracy, latitude, altitudeAboveMeanSeaLevel, bearing, horizontalAccuracy, verticalAccuracy, longitude, speed` · 723행 | 문서에 없는 `altitudeAboveMeanSeaLevel`이 있고 열 순서가 다르다. 값은 적지 않는다 |
 | Metadata.csv | 버전, 플랫폼, 기록 시각, 시간대 등. 옛 기록에는 일부 열이 없다 | 있음. 항목 12개(§7) · 데이터 1행 | |
-| Pedometer.csv | 있을 것으로 추정(미확인) | 있음. `time, seconds_elapsed, steps` · 275행 | §6 |
-| 그 밖의 파일 | — | AccelerometerUncalibrated.csv(71,589행), GyroscopeUncalibrated.csv(71,590행): 열은 IMU와 같다. Annotation.csv: 0바이트(헤더도 없음) | Uncalibrated 가속도는 중력 포함·단위 g(§4). Annotation은 주석을 달지 않으면 비는 것으로 보인다(폰을 만지지 않음과 맞음). 빈 파일 처리 → D-32 |
+| Pedometer.csv | 있을 것으로 추정(미확인) | 있음. `time, seconds_elapsed, steps` · 275행 | §6. 앱 걸음 수는 직접 센 100걸음을 128로 셌다(§10). 참고값 (DECISIONS D-30) |
+| 보정 안 한 가속도계·자이로(Uncalibrated) | 11/8부터 켠다 | 있음(11/7 시범부터 켜져 있었다): `AccelerometerUncalibrated.csv` 71,589행, `GyroscopeUncalibrated.csv` 71,590행, 열은 IMU와 같다 | 가속도는 중력 포함·단위 g(§4). 단위·부호 교차 확인에만 읽는다(DECISIONS D-32, D-44) |
+| 그 밖의 파일 | — | AccelerometerUncalibrated.csv(71,589행), GyroscopeUncalibrated.csv(71,590행): 열은 IMU와 같다. Annotation.csv: 0바이트(헤더도 없음) | Uncalibrated 가속도는 중력 포함·단위 g(§4). Annotation은 주석을 달지 않으면 비는 것으로 보인다(폰을 만지지 않음과 맞음). 빈 파일 처리 → D-47 |
 | 형식 | — | UTF-8, BOM 없음, 줄바꿈 LF, 쉼표 구분, 첫 줄 헤더 | 9개 파일 모두 같다 |
 
 ## 2. 시간
@@ -42,9 +43,9 @@ Phase 0에서 시범 측정 zip을 열어 채운다. '문서로 아는 것'은 S
 |---|---|---|---|
 | `time` | UNIX epoch 나노초, UTC | 19자리 정수(ns). 모든 파일에서 순증가, 중복 0 | KST로 바꾼 시각이 zip 안 파일 시각(20:20:44, 20:32:42)과 맞는다 |
 | `seconds_elapsed` | 기록 시작부터 초 | = (`time` − `recording epoch time`) ÷ 1e9. 모든 센서에서 차이 0.001 ms 미만 | 0점이 Metadata의 기록 시작이다. Location은 음수(−14.219 s)부터 시작한다 |
-| 파일 이름 안의 시각 | 현지 시각 | **UTC**. 이름의 `2026-11-07_11-20-44` = Metadata `recording time` = UTC 11:20:44 = KST 20:20:44 | SPEC §3.1과 다르다 → D-27 |
-| 센서 사이 첫 `time` 차이 | — | IMU 5개는 서로 14 ms 안(t_s 0.044–0.058 s). Pedometer 첫 갱신 t_s 9.809 s. Location 첫 점 t_s −14.219 s | 가장 이른 첫 `time`은 Location의 기록 전 점이다 → D-28 |
-| Metadata의 기록 시작 시각과 센서 첫 `time`의 차이 | — | `recording epoch time` = 1794050444444(ms, 13자리) = 20:20:44.444 KST. IMU 첫 샘플은 44–58 ms 뒤 | 센서 `time`은 ns, 이 값은 ms다. DECISIONS D-20, D-28 |
+| 파일 이름 안의 시각 | UTC (A가 11/8에 확인. 파일로 다시 확인 필요) | **UTC**. 이름의 `2026-11-07_11-20-44` = Metadata `recording time` = UTC 11:20:44 = KST 20:20:44 | 11/7 시범 파일로 확인: 이름의 시각을 Metadata의 recording epoch time, 센서 첫 `time`과 비교(SPEC §3.2의 10). SPEC v0.1 §3.1의 '현지 시각'과 달랐다 → D-27 |
+| 센서 사이 첫 `time` 차이 | — | IMU 5개는 서로 14 ms 안(t_s 0.044–0.058 s). Pedometer 첫 갱신 t_s 9.809 s. Location 첫 점 t_s −14.219 s | 가장 이른 첫 `time`은 Location의 기록 전 점이다 → D-43 |
+| Metadata의 기록 시작 시각과 센서 첫 `time`의 차이 | — | `recording epoch time` = 1794050444444(ms, 13자리) = 20:20:44.444 KST. IMU 첫 샘플은 44–58 ms 뒤 | 센서 `time`은 ns, 이 값은 ms다. DECISIONS D-20, D-43 |
 
 센서별 첫·끝 시각(2026-11-07, Asia/Seoul):
 
@@ -70,7 +71,7 @@ Phase 0에서 시범 측정 zip을 열어 채운다. '문서로 아는 것'은 S
 
 - AccelerometerUncalibrated(71,589행)와 GyroscopeUncalibrated(71,590행)도 간격이 같고(중앙 10.042 ms, 최대 0.014 s) 끊김이 없다.
 - IMU에는 0.05 s를 넘는 간격이 하나도 없다(`qa.gap_warn_s` 0.25 s 기준으로 Q03 PASS에 해당). Location에는 0.9 s 미만 간격도 3개(최소 0.01 s) 있다.
-- Metadata `sampleRateMs`의 설정은 10 ms인데 실제 중앙 간격은 10.042 ms(99.58 Hz)다. Q02로는 PASS이고 '목표 100 Hz보다 낮음' INFO가 붙는다 → D-34.
+- Metadata `sampleRateMs`의 설정은 10 ms인데 실제 중앙 간격은 10.042 ms(99.58 Hz)다. Q02로는 PASS이고 '목표 100 Hz보다 낮음' INFO가 붙는다 → D-49.
 - 문서로 아는 것: 센서 샘플링은 고르지 않다. 이 파일의 IMU 간격은 p5–p95 폭이 0.002 ms로 거의 고르다.
 
 ## 4. Accelerometer · Gravity · Gyroscope
@@ -79,11 +80,11 @@ Phase 0에서 시범 측정 zip을 열어 채운다. '문서로 아는 것'은 S
 |---|---|---|---|
 | Accelerometer 단위 | 문서에 없음(g 또는 m/s²) | **m/s²** | 중력 제외 신호라 크기만으로는 못 정해서, SPEC §5.2대로 같은 구간 Gravity 크기(9.80665)로 정했다. 아래 Accelerometer + Gravity = 9.80665 × AccelerometerUncalibrated도 같은 결론이다 |
 | Accelerometer가 중력을 포함하는가 | 문서에 없음 | **포함하지 않는다**(사용자 가속도) | 서 있을 때 ‖a‖ 중앙 0.101(0 근처). 걷는 동안 평균 벡터 크기 0.13 m/s², 그 Gravity 방향 성분 0.015 m/s²(중력을 포함하면 약 9.8) |
-| 서 있을 때 ‖a‖ | — | Accelerometer 0.101 m/s² · Accelerometer+Gravity 9.798 m/s²(0.999 g) · AccelerometerUncalibrated 0.999 g | 1 s 창 움직임 지표(Accelerometer 세 축 분산 합의 제곱근)가 0.23 m/s² 미만인 창은 기록 끝 713–716 s(3 s, 폰을 꺼내 든 뒤)뿐이다. 시작에는 서 있는 구간이 없다. 끝 서 있기 701–710 s(주머니 안)의 지표는 0.25–2.3 m/s² → D-30 |
+| 서 있을 때 ‖a‖ | — | Accelerometer 0.101 m/s² · Accelerometer+Gravity 9.798 m/s²(0.999 g) · AccelerometerUncalibrated 0.999 g | 1 s 창 움직임 지표(Accelerometer 세 축 분산 합의 제곱근)가 0.23 m/s² 미만인 창은 기록 끝 713–716 s(3 s, 폰을 꺼내 든 뒤)뿐이다. 시작에는 서 있는 구간이 없다. 끝 서 있기 701–710 s(주머니 안)의 지표는 0.25–2.3 m/s² → D-45 |
 | 걷는 동안 ‖a‖ 중앙값 | — | Accelerometer 3.761 m/s² · Accelerometer+Gravity 9.668 m/s²(0.986 g) · AccelerometerUncalibrated 0.986 g | 움직임 지표 1.38 m/s² 초과인 1 s 창 701개(전체 715) 기준. 지표 중앙 4.28 m/s² |
 | 폰 방향 | — | 걷는 동안 Gravity 평균 방향이 −y 축과 23.8°, +z 축과 67.5°, x 축과 약 83–97° | 분마다 평균 방향의 변화 1.8–13.2°, 순간 방향과 평균의 각도 중앙 8.3°·p95 21.4°. iOS 규약(Gravity가 땅 쪽)이면 폰 위쪽이 위를 향하고 약 24° 기울었다. 0–8 s와 710 s 뒤는 방향이 약 60–73° 다르다(폰을 넣고 꺼낸 때로 보임) |
 | Gravity 단위 | 문서에 없음 | **m/s²** | 크기가 모든 샘플에서 9.80665(최소 = 최대) |
-| Gravity와 Accelerometer의 부호 관계 | 문서에 없음 | **총 가속도 = Accelerometer + Gravity**(합성 부호 +1) | (1) ‖Accelerometer + Gravity − 9.80665 × Uncalibrated‖ 중앙 0.0000 m/s²(부호를 바꾸면 19.61). (2) Gravity 방향으로 투영한 총 가속도가 걷는 동안 위로 더 크게 벗어난다: p99 − 중앙 7.18 > 중앙 − p1 3.23 m/s², 왜도 +0.72(반대 부호는 −0.72). (3) 서 있을 때 Uncalibrated와 Gravity의 cos = +1.000 → D-29 |
+| Gravity와 Accelerometer의 부호 관계 | 문서에 없음 | **총 가속도 = Accelerometer + Gravity**(합성 부호 +1) | (1) ‖Accelerometer + Gravity − 9.80665 × Uncalibrated‖ 중앙 0.0000 m/s²(부호를 바꾸면 19.61). (2) Gravity 방향으로 투영한 총 가속도가 걷는 동안 위로 더 크게 벗어난다: p99 − 중앙 7.18 > 중앙 − p1 3.23 m/s², 왜도 +0.72(반대 부호는 −0.72). (3) 서 있을 때 Uncalibrated와 Gravity의 cos = +1.000 → D-44 |
 | Gyroscope 단위 | rad/s로 가정 | **rad/s** | ‖ω‖ 걷는 동안 중앙 1.43, p95 3.20, p99 4.41, 최대 12.23, 서 있을 때 중앙 0.037. °/s라면 걷는 동안 중앙이 1.4 °/s라 너무 작다. GyroscopeUncalibrated와의 차이 중앙 0.0038 rad/s |
 
 ## 5. Location
@@ -92,11 +93,11 @@ Phase 0에서 시범 측정 zip을 열어 채운다. '문서로 아는 것'은 S
 |---|---|---|---|
 | 갱신 간격 | — | 1.000 s(중앙 999.989 ms) | 기록 전 점 2개(t_s −14.2, −5.2 s). 시작 직후 1.38 s·1.22 s 간격 뒤로는 1 s(§3) |
 | `speed` 단위와 범위 | 단위는 문서에 없음(m/s로 가정) | **m/s**. 유효값 최소 0, p5 0.455, 중앙 0.912, p95 1.238, 최대 1.476. 걷는 동안(t_s 1.36–700.32) 중앙 0.919, 평균 0.903 | `speed` = −1(무효)이 7개, 모두 t_s 2.3 s 이전(그 점은 `speedAccuracy`도 −1). 중앙 0.92는 이 칸 메모의 '1.2–1.5'보다 낮지만, km/h라면 0.26 m/s라 걸음 101 spm과 맞지 않는다. 경로 속도와의 차이는 아래 |
-| `speedAccuracy` 중앙값 | 속도 오차의 크기 | 0.894 m/s (p5 0.589, p95 0.987) | 걷는 동안 0.5 이하 3.0%(21/697), 0.75 이하 14.5%, 1.0 이하 97.6%. `speed.doppler_max_speed_accuracy_ms`(0.5)를 넘는 점이 97% → D-31 |
+| `speedAccuracy` 중앙값 | 속도 오차의 크기 | 0.894 m/s (p5 0.589, p95 0.987) | 걷는 동안 0.5 이하 3.0%(21/697), 0.75 이하 14.5%, 1.0 이하 97.6%. `speed.doppler_max_speed_accuracy_ms`(0.5)를 넘는 점이 97% → D-46 |
 | `horizontalAccuracy` 중앙값 | 위치 오차의 크기 | 4.75 m (p95 4.75, 최대 23.06) | `qa.gps_accuracy_warn_m`(20) 이하. `verticalAccuracy` 중앙 4.98 m, `bearingAccuracy` 중앙 68.3° |
 | 총 이동 거리 | — | 걷는 동안 892.7 m(1 s 점을 모두 연결), 874.5 m(10점마다 연결) | 5–30점마다 연결하면 860–877 m라 위치 잡음으로 늘어난 길이는 2–4%다. 모든 점(기록 전 점 포함) 954.1 m, 수평 정확도 20 m 이하 점끼리 891.0 m. 거리는 위경도 사이 대원 거리의 합 |
 | 지도 거리와의 차이 | — | 비교하지 않음 | A가 준 코스 전체 지도 거리는 767.9 m(11/8)다. 시범은 걷기 끝점이 11/8 리허설과 113 m 떨어져 있어(시작점은 24 m, 걷기도 90 s 더 김) 같은 경로로 보지 않는다. 리허설과 지도의 비교는 §10 |
-| Doppler 속도 중앙값 vs 이동 거리 ÷ 시간 | — | Doppler 중앙 0.919 m/s(적분 628 m) vs 경로 1.26–1.28 m/s(875–893 m ÷ 696 s) | Doppler가 27–30% 낮다. 11/8 리허설(§10)에서는 GPS 경로가 지도와 2% 안으로 맞고 Doppler가 14% 낮았다. 1179걸음으로 나눈 보폭은 0.53 m vs 0.74–0.76 m → DECISIONS D-01, D-31 |
+| Doppler 속도 중앙값 vs 이동 거리 ÷ 시간 | — | Doppler 중앙 0.919 m/s(적분 628 m) vs 경로 1.26–1.28 m/s(875–893 m ÷ 696 s) | Doppler가 27–30% 낮다. 11/8 리허설(§10)에서는 GPS 경로가 지도와 2% 안으로 맞고 Doppler가 14% 낮았다. 1179걸음으로 나눈 보폭은 0.53 m vs 0.74–0.76 m → DECISIONS D-01, D-46 |
 
 ## 6. Pedometer
 
@@ -112,7 +113,7 @@ Phase 0에서 시범 측정 zip을 열어 채운다. '문서로 아는 것'은 S
 
 | 항목 | 값 | 메모 |
 |---|---|---|
-| 항목 이름 목록 | version, device name, recording epoch time, recording time, recording timezone, platform, appVersion, device id, sensors, sampleRateMs, standardisation, platform version (12개) | 값은 적지 않는다(기기 이름 포함). device name·device id는 값이 있고 둘 다 zip 이름에 들어 있지 않다. SPEC §3.1 목록에 없는 device id, sensors, sampleRateMs가 있다 → D-32 |
+| 항목 이름 목록 | version, device name, recording epoch time, recording time, recording timezone, platform, appVersion, device id, sensors, sampleRateMs, standardisation, platform version (12개) | 값은 적지 않는다(기기 이름 포함). device name·device id는 값이 있고 둘 다 zip 이름에 들어 있지 않다. SPEC §3.1 목록에 없는 device id, sensors, sampleRateMs가 있다 → D-47 |
 | 앱 버전 | 1.68.1 (version 3) | |
 | 플랫폼과 버전 | ios 26.2.1 | |
 | recording timezone | Asia/Seoul | |
@@ -132,9 +133,9 @@ Phase 0에서 시범 측정 zip을 열어 채운다. '문서로 아는 것'은 S
 
 - 두 신호의 걸음 수와 간격이 사실상 같다. 이 파일로는 D-02를 가를 수 없다(합성 신호와 직접 센 파일로 다시 본다).
 - 걷는 동안 간격은 최소 0.35–0.38 s, 최대 1.08 s로 모두 D-09 범위(0.30–1.50 s) 안이다(이상 간격 0%). 101 spm 산책 한 번의 결과다.
-- 걸음 간격 정밀도(가장 긴 묶음에서 앞뒤 20 s를 빼고 봉우리를 포물선 보간): CV 크기 5.74%·수직 5.27%, 1분 창 중앙 케이던스 ±3% 안 걸음 비율 52.4%·56.4%. 보간 없이 샘플 시각만 쓰면 이 비율이 7–9%p 낮다. 메트로놈 결과는 §10 → D-38.
+- 걸음 간격 정밀도(가장 긴 묶음에서 앞뒤 20 s를 빼고 봉우리를 포물선 보간): CV 크기 5.74%·수직 5.27%, 1분 창 중앙 케이던스 ±3% 안 걸음 비율 52.4%·56.4%. 보간 없이 샘플 시각만 쓰면 이 비율이 7–9%p 낮다. 메트로놈 결과는 §10 → D-51.
 - 분 단위 비교: 1–10분은 Pedometer 증가량과 ±1.2걸음 안이다. 0분은 +4(시작), 11분은 +11(끝 서 있기의 흔들림을 걸음으로 셈)이다.
-- 끝 서 있기(701–711 s)의 봉우리 높이는 0.07–0.41 g로 걷는 동안 중앙 0.45 g보다 작지만, 간격이 2 s보다 짧아 지속 보행 묶음(D-21)에 붙는다. 그래서 t_arrive가 700.3 s가 아니라 711.0 s로 잡힌다 → D-33.
+- 끝 서 있기(701–711 s)의 봉우리 높이는 0.07–0.41 g로 걷는 동안 중앙 0.45 g보다 작지만, 간격이 2 s보다 짧아 지속 보행 묶음(D-21)에 붙는다. 그래서 t_arrive가 700.3 s가 아니라 711.0 s로 잡힌다 → D-48.
 - 처음 10 s 안에 봉우리 13개(서 있기 없이 바로 걸었다. Pedometer는 t_s 9.81 s에 9), 마지막 10 s 안에 3개(오검출)가 있다. Q05 기준이면 둘 다 WARN이다.
 - ML 축 스펙트럼 점검(SPEC §5.4 수용 기준 4)은 하지 않았다(Phase 1).
 
@@ -142,7 +143,7 @@ DECISIONS D-02, D-09의 근거 자료다.
 
 ### Phase 1 검출기 결과 (2026-11-08)
 
-`walkmusic.steps`(D-33·D-36)로 출발·도착 사이 걸음을 셌다. 칸마다 크기 / 수직 성분.
+`walkmusic.steps`(D-48·D-29)로 출발·도착 사이 걸음을 셌다. 칸마다 크기 / 수직 성분.
 
 | 파일 | 걸음 | rate (spm) | CV (%) | 직접 센 값 | Pedometer(Q07 창) | ML 축 주 주파수 (걸음 주파수 절반) |
 |---|---|---|---|---|---|---|
@@ -152,7 +153,7 @@ DECISIONS D-02, D-09의 근거 자료다.
 | 메트로놈 TEST_A_1108_3 | 349 / 349 | 99.77 / 99.77 | 4.67 / 4.54 | — | 334 대 334 (0.0%) | 0.831 Hz (0.831) |
 
 - 두 신호의 걸음 수는 4개 파일 모두 같고, 수직 성분의 CV가 0.07–0.45%p 낮다 → D-02.
-- 메트로놈(100 BPM, 앞뒤 20 s 뺌) S3 47.3% / 49.5%, S5 79.7% / 80.8% → D-38.
+- 메트로놈(100 BPM, 앞뒤 20 s 뺌) S3 47.3% / 49.5%, S5 79.7% / 80.8% → D-51.
 - 시범은 일회용 계산(1179)보다 6걸음 적다. 출발 직후와 감속할 때 간격이 중앙값의 1.4배를 넘는 곳에서 묶음을 잘랐기 때문이다(`steps.bout_split_frac`). 서 있기로 감싼 100걸음 파일은 영향이 없다.
 - ML 축 점검(SPEC §5.4 수용 기준 4): 허리 파우치 3개는 주 피크가 걸음 주파수의 절반에 있고, 바지 주머니 시범은 걸음 주파수 쪽에 있다.
 
@@ -161,17 +162,17 @@ DECISIONS D-02, D-09의 근거 자료다.
 SPEC의 가정과 다른 점을 한 줄씩 적고 DECISIONS.md의 번호를 단다.
 
 - 파일 이름과 Metadata `recording time`의 시각은 UTC다(SPEC §3.1은 현지 시각). 이름에서 날짜·시각을 읽지 않는다 — D-27
-- 기록 시작의 대안 '모든 센서 첫 `time`의 최솟값'(SPEC §5.1)은 Location의 기록 전 점(t_s −14.2 s)을 고른다. 기준은 `recording epoch time`, 대안은 IMU 파일만 — D-28 (D-20)
-- Accelerometer는 중력 제외·m/s², Gravity는 m/s², AccelerometerUncalibrated는 중력 포함·g다. 총 가속도 = Accelerometer + Gravity — D-29
-- '서 있는 앞 10 s'(SPEC §5.2)와 Q05의 '처음·마지막 10 s'를 그대로 쓸 수 없다. 단위 판별은 기록 전체의 통계로 한다 — D-30
-- `speedAccuracy` 0.5 m/s 이하인 점이 3%뿐이고, Doppler 속도가 경로 속도보다 27–30% 낮다 — D-31 (D-01)
-- SPEC §3.1에 없는 파일·열(Uncalibrated 2개, 빈 Annotation.csv, `device id` 등)과 빈 파일 처리 — D-32
-- 서 있는 동안의 흔들림이 걸음으로 잡혀 지속 보행의 끝이 밀린다 — D-33 (D-02, D-21)
-- 100 Hz 설정의 실제 fs가 99.58 Hz라 Q02가 늘 INFO를 낸다 — D-34
-- 파우치 안 폰을 가로로 넣어도 된다(PROTOCOL 2.1은 '위쪽이 위로') — D-35
-- 서 있기 앞뒤의 폰 넣기·꺼내기 동작이 지속 보행으로 잡혀 출발·도착이 틀어진다(SPEC §5.5(a), D-21) — D-36
-- Pedometer가 직접 센 100걸음을 128로 세었다. SPEC §5.4 수용 기준 3과 Q07을 그대로 쓸 수 없다 — D-37
-- 박자에 맞춰 걸어도 걸음마다 ±3% 안은 절반쯤이라 H1-2(80%) 판정이 측정 한계에 걸린다(SPEC §2) — D-38
+- 기록 시작의 대안 '모든 센서 첫 `time`의 최솟값'(SPEC §5.1)은 Location의 기록 전 점(t_s −14.2 s)을 고른다. 기준은 `recording epoch time`, 대안은 IMU 파일만 — D-43 (D-20)
+- Accelerometer는 중력 제외·m/s², Gravity는 m/s², AccelerometerUncalibrated는 중력 포함·g다. 총 가속도 = Accelerometer + Gravity — D-44
+- '서 있는 앞 10 s'(SPEC §5.2)와 Q05의 '처음·마지막 10 s'를 그대로 쓸 수 없다. 단위 판별은 기록 전체의 통계로 한다 — D-45
+- `speedAccuracy` 0.5 m/s 이하인 점이 3%뿐이고, Doppler 속도가 경로 속도보다 27–30% 낮다 — D-46 (D-01)
+- SPEC §3.1에 없는 파일·열(Uncalibrated 2개, 빈 Annotation.csv, `device id` 등)과 빈 파일 처리 — D-47
+- 서 있는 동안의 흔들림이 걸음으로 잡혀 지속 보행의 끝이 밀린다 — D-48 (D-02, D-21)
+- 100 Hz 설정의 실제 fs가 99.58 Hz라 Q02가 늘 INFO를 낸다 — D-49
+- 파우치 안 폰을 가로로 넣어도 된다(PROTOCOL 2.1은 '위쪽이 위로') — D-50
+- 서 있기 앞뒤의 폰 넣기·꺼내기 동작이 지속 보행으로 잡혀 출발·도착이 틀어진다(SPEC §5.5(a), D-21) — D-29
+- Pedometer가 직접 센 100걸음을 128로 세었다. SPEC §5.4 수용 기준 3과 Q07을 그대로 쓸 수 없다 — D-30
+- 박자에 맞춰 걸어도 걸음마다 ±3% 안은 절반쯤이라 H1-2(80%) 판정이 측정 한계에 걸린다(SPEC §2) — D-51
 
 ## 10. 사전 점검 파일 (2026-11-08, A)
 
@@ -186,9 +187,9 @@ SPEC의 가정과 다른 점을 한 줄씩 적고 DECISIONS.md의 번호를 단�
 - **형식·샘플링:** 9개 파일과 열이 시범과 같다. IMU 중앙 간격 10.040–10.042 ms(99.58–99.60 Hz), 최대 0.011–0.019 s, 1 s 넘는 끊김 0. Location 1 Hz(기록 전 점 있음), Pedometer 약 2.57 s.
 - **단위·부호:** 시범과 같다. ‖Gravity‖ 9.8066, 서 있을 때 ‖Accelerometer‖ 0.09–0.10 m/s², AccelerometerUncalibrated 1.004–1.005 g, Accelerometer + Gravity의 수직 성분 왜도 +0.86–1.09.
 - **폰 방향:** 서 있을 때 Gravity가 −x 축과 2.3–6.4°, 걷는 동안 중앙 방향은 6.6–7.5°다(시범은 −y 축 근처). 걷는 동안 분마다 평균 방향과 서 있을 때 방향의 차이는 2.6–4.9°(폰을 꺼내는 마지막 분 제외), 세 파일끼리 0.9–4.3°(Q14 문턱 30°). 걷는 동안 ‖ω‖ 중앙 0.45–0.55 rad/s, ‖Accelerometer‖ 중앙 2.4–2.9 m/s²(바지 주머니였던 시범은 1.43 rad/s, 3.76 m/s²).
-- **서 있기와 그 앞뒤:** 세 파일 모두 기록 직후 1–2 s 동안 폰 방향이 파우치 안과 47–102° 다르고, 2–4 s 사이에 파우치 방향(10° 안)이 된다. 그 뒤 시작 서 있기 전까지 움직인 구간이 있다(봉우리 16–23개, 리허설은 Pedometer도 t_s 14.5 s에 12걸음). 서 있기는 리허설 18–29.9 s·639–656 s, 100걸음 13–26.4 s·91.6–104 s, 메트로놈 13–23 s·232.3–245 s다(움직임 지표 0.04–0.8 m/s², 걷는 동안은 약 3–4). 끝 서 있기 뒤에는 폰을 꺼내는 동작(방향이 27–99° 바뀜)이 봉우리 8–15개로 잡힌다. 앞뒤 동작이 10걸음 이상이라 D-21대로 하면 출발·도착이 틀어진다(리허설 t_depart 9.2 s, t_arrive 663.3 s) → D-36.
-- **100걸음:** 서 있기 사이(26.4–91.6 s)에서 검출 102걸음(크기·수직 같음), 직접 센 100과 +2(`qa.hand_count_tol_steps` 경계). 걸음 간격 중앙 0.643 s(93.3 spm). 같은 창에서 Pedometer는 약 128(+28%) 늘었다. 첫 갱신 t_s 33.24 s(값 8)부터 92.4 s(128)까지 59 s에 120이 늘어 122 spm 속도인데, 걸음 간격(93 spm)과 맞지 않는다 → D-37.
-- **메트로놈(100 BPM):** 걷기 23.0–232.3 s, 349걸음. 앞뒤 20 s를 빼면 간격 281개, 케이던스 중앙 99.80–99.83·rate 99.97 spm으로 박자와 0.2% 안이다. 걸음마다 ±3% 안(S3) 47.0–49.5%, ±5% 안(S5) 79.4–80.8%, CV 3.97–4.13%(크기·수직). 앞뒤를 빼지 않으면 S3 46.0–48.0%, S5 77.0–78.7%. Pedometer 347(검출과 −0.5%) → D-38.
+- **서 있기와 그 앞뒤:** 세 파일 모두 기록 직후 1–2 s 동안 폰 방향이 파우치 안과 47–102° 다르고, 2–4 s 사이에 파우치 방향(10° 안)이 된다. 그 뒤 시작 서 있기 전까지 움직인 구간이 있다(봉우리 16–23개, 리허설은 Pedometer도 t_s 14.5 s에 12걸음). 서 있기는 리허설 18–29.9 s·639–656 s, 100걸음 13–26.4 s·91.6–104 s, 메트로놈 13–23 s·232.3–245 s다(움직임 지표 0.04–0.8 m/s², 걷는 동안은 약 3–4). 끝 서 있기 뒤에는 폰을 꺼내는 동작(방향이 27–99° 바뀜)이 봉우리 8–15개로 잡힌다. 앞뒤 동작이 10걸음 이상이라 D-21대로 하면 출발·도착이 틀어진다(리허설 t_depart 9.2 s, t_arrive 663.3 s) → D-29.
+- **100걸음:** 서 있기 사이(26.4–91.6 s)에서 검출 102걸음(크기·수직 같음), 직접 센 100과 +2(`qa.hand_count_tol_steps` 경계). 걸음 간격 중앙 0.643 s(93.3 spm). 같은 창에서 Pedometer는 약 128(+28%) 늘었다. 첫 갱신 t_s 33.24 s(값 8)부터 92.4 s(128)까지 59 s에 120이 늘어 122 spm 속도인데, 걸음 간격(93 spm)과 맞지 않는다 → D-30.
+- **메트로놈(100 BPM):** 걷기 23.0–232.3 s, 349걸음. 앞뒤 20 s를 빼면 간격 281개, 케이던스 중앙 99.80–99.83·rate 99.97 spm으로 박자와 0.2% 안이다. 걸음마다 ±3% 안(S3) 47.0–49.5%, ±5% 안(S5) 79.4–80.8%, CV 3.97–4.13%(크기·수직). 앞뒤를 빼지 않으면 S3 46.0–48.0%, S5 77.0–78.7%. Pedometer 347(검출과 −0.5%) → D-51.
 - **리허설 걸음:** 크기·수직 모두 1012걸음. 앞뒤 20 s를 뺀 CV 4.79–4.86%, 1분 창 중앙 케이던스 ±3% 안 55.4–56.4%. 같은 창 Pedometer 1079(+6.6%). 걷는 동안 0.9 s 넘는 걸음 간격이 없어 측정 구간의 2초 멈춤은 데이터에 없다.
 - **리허설 속도(코스 전체, 609.0 s):** GPS 경로 776.4 m(1 s 점 연결)·750.6 m(10점마다) → 지도 767.9 m 대비 +1.1%·−2.2%. Doppler 적분 657.1 m(−14.4%), 중앙 1.070 m/s. 지도 거리 ÷ 시간 = 1.261 m/s. `speedAccuracy` 0.5 이하 0.9%, `horizontalAccuracy` 중앙 4.75 m.
 - **리허설 측정 구간:** GPS 점이 구간 시작점에 가장 가까운 때 t_s 330.5 s(2.1 m), 끝점 547.5 s(3.0 m)로 사이 217.0 s다. 그 사이 GPS 경로 274.0 m(1.263 m/s), Doppler 적분 229.5 m(중앙 1.005 m/s). 구간 지도 거리는 처음 342.9 m로 적었다가 다른 길을 잰 것이어서 다시 재 265.2 m가 됐다(A, 2026-11-08). 두 끝점 사이 직선거리 266.3 m와 1.1 m 차이고, 걸은 경로는 직선에서 최대 3.7–8.5 m만 벗어났다. 265.2 m ÷ 217.0 s = 1.222 m/s이고, 지도 거리 대비 GPS 경로는 +3.3%, Doppler 적분은 −13.5%다. 시범도 두 끝점을 1–2 m 안으로 지났다(사이 211.0 s). Q08a는 세 파일 모두 PASS(GPS +1.3 – +3.3%).

@@ -1,4 +1,4 @@
-participant,role,age,height_cm,mass_kg,leg_length_m,phone_model,phone_os,carry_position,earphones,section_distance_m,notes
-A,팀장·배정표·기록지 점검,,,,,,iOS 26.2.1,허리 파우치(등 쪽)·가로·폰 위쪽이 왼쪽 골반 쪽(몸을 정면에서 본 기준),블루투스 헤드셋,265.2,측정 구간 거리 2026-11-08 다시 잼(처음 342.9 m는 다른 길)
-B,앱·데이터·분석 코드,,,,,,,,,,
-C,곡·플레이리스트,,,,,,,,,,
+participant,role,age,height_cm,mass_kg,leg_length_m,phone_model,phone_os,carry_position,earphones,section_distance_m,notes,thigh_length_m,shank_length_m
+A,팀장·배정표·기록지 점검,,,,,,iOS 26.2.1,허리 파우치(등 쪽)·가로·폰 위쪽이 왼쪽 골반 쪽(몸을 정면에서 본 기준),블루투스 헤드셋,265.2,측정 구간 거리 2026-11-08 다시 잼(처음 342.9 m는 다른 길),,
+B,앱·데이터·분석 코드,,,,,,,,,,,,
+C,곡·플레이리스트,,,,,,,,,,,,

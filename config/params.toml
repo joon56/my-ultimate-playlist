@@ -9,20 +9,23 @@
 [time]
 timezone = "Asia/Seoul"              # [확정] 기록 시각은 UTC로 저장되므로 현지 시각으로 바꿔 쓴다
 
+[manifest]                           # 기록지(manifest)와 zip을 연결할 때 (SPEC §3.4)
+start_time_tol_s = 90                # [초안 D-27] zip의 기록 시작 시각과 기록지 시작 시각(시:분)의 허용 차이. 분 단위로 적으므로 60 s에 앱 조작 지연을 더한 값
+
 [constants]
 g = 9.81                             # m/s^2
 
 [qa]                                 # docs/QA_CHECKLIST.md의 임계값
 min_fs_hz = 50.0                     # [확정] 최소 샘플링
-target_fs_hz = 100.0                 # [확정] 가능하면 100 Hz
+target_fs_hz = 100.0                 # [확정] 앱 설정 100 Hz(10 ms)
 gap_warn_s = 0.25                    # [초안] 이보다 긴 끊김은 경고
 gap_fail_s = 1.0                     # [초안] 걷는 동안 이보다 긴 끊김은 실패
 min_walk_duration_s = 480            # [확정] 한 번 걷기는 8분 이상
 hand_count_tol_steps = 2             # [확정] 100걸음 직접 세기 ± 2
-pedometer_tol_pct = 3.0              # [초안] 걸음 수 검출 vs 앱 걸음 수
+pedometer_tol_pct = 3.0              # [초안] 걸음 수 검출 vs 앱 걸음 수. 참고값이다(앱이 100걸음을 128로 셌다, D-30)
 gps_distance_tol_pct = 5.0           # [확정] GPS 거리와 지도 거리 차이 5% 이내
 gps_accuracy_warn_m = 20.0           # [초안] 수평 정확도 중앙값 경고
-standing_check_s = 10                # [확정] 시작·끝 10초 서 있기
+standing_check_s = 10                # [확정] 출발 직전·도착 직후 10초 서 있기(11/8 절차: 폰을 넣은 뒤 서 있기)
 min_valid_steps_per_segment = 30     # [초안] 곡 구간 하나에 필요한 유효 걸음 수
 max_bad_interval_frac = 0.05         # [초안] 이상 걸음 간격 비율 상한
 phone_tilt_warn_deg = 30.0           # [초안] 회차 간 폰 방향 차이 경고
@@ -34,9 +37,9 @@ stop_gap_s = 2.0                     # [확정] 걸음이 2초 넘게 없으면 
 phone_touch_pad_s = 5                # [초안] 폰을 만진 시각 앞뒤
 stop_pad_s = 2.0                     # [초안 D-19] 정지(걸음 간격 > stop_gap_s) 앞뒤에서 함께 뺄 시간
 min_bout_steps = 10                  # [초안 D-21] 이만큼 이어진 걸음이 있어야 '지속 보행'
-stand_min_s = 8.0                    # [초안 D-36] 서 있기로 보는 최소 길이
-stand_motion_frac = 0.25             # [초안 D-36] 1 s 움직임 지표가 걷는 동안 중앙값의 이 비율 미만이면 가만히 있는 초
-stand_search_s = 120.0               # [초안 D-36] 기록 처음·끝에서 서 있기를 찾는 범위
+stand_min_s = 8.0                    # [초안 D-29] 서 있기로 보는 최소 길이
+stand_motion_frac = 0.25             # [초안 D-29] 1 s 움직임 지표가 걷는 동안 중앙값의 이 비율 미만이면 가만히 있는 초
+stand_search_s = 120.0               # [초안 D-29] 기록 처음·끝에서 서 있기를 찾는 범위
 
 [orientation]
 lowpass_hz = 0.3                     # [초안 D-22] 걷는 동안 수직 방향(중력 방향) 추정용 저역 통과
@@ -51,14 +54,14 @@ impact_lowpass_hz = 20.0             # [초안] 충격 피크용 저역 통과
 min_interval_s = 0.30                # [초안] 걸음 간격 하한
 max_interval_s = 1.50                # [초안] 걸음 간격 상한
 impact_window_s = 0.10               # [초안] 걸음 시각 앞뒤에서 충격 피크를 찾는 창
-filter_order = 2                     # [초안 D-33] 걸음 검출 대역 통과(Butterworth) 차수
-adaptive_window_s = 2.0              # [초안 D-33] 적응 문턱의 이동 RMS 창
-adaptive_k = 0.5                     # [초안 D-33] 봉우리 높이 ≥ adaptive_k × 이동 RMS
-floor_frac = 0.25                    # [초안 D-33] 높이 하한 = floor_frac × 걷는 동안 이동 RMS 중앙값
-motion_walk_frac = 0.3               # [초안 D-33] 1 s 움직임 지표가 기준의 이 비율보다 크면 '걷는 창'(하한 계산용)
-bout_split_frac = 0.4                # [초안 D-33] 묶음 안에서 간격이 중앙값과 이 비율 넘게 다르면 거기서 자른다
-bout_max_cv_pct = 25.0               # [초안 D-33] 걷기 묶음으로 인정하는 걸음 간격 CV 상한
-bout_min_height_frac = 0.5           # [초안 D-33] 걷기 묶음의 봉우리 높이 중앙값 하한(가장 큰 묶음 대비)
+filter_order = 2                     # [초안 D-48] 걸음 검출 대역 통과(Butterworth) 차수
+adaptive_window_s = 2.0              # [초안 D-48] 적응 문턱의 이동 RMS 창
+adaptive_k = 0.5                     # [초안 D-48] 봉우리 높이 ≥ adaptive_k × 이동 RMS
+floor_frac = 0.25                    # [초안 D-48] 높이 하한 = floor_frac × 걷는 동안 이동 RMS 중앙값
+motion_walk_frac = 0.3               # [초안 D-48] 1 s 움직임 지표가 기준의 이 비율보다 크면 '걷는 창'(하한 계산용)
+bout_split_frac = 0.4                # [초안 D-48] 묶음 안에서 간격이 중앙값과 이 비율 넘게 다르면 거기서 자른다
+bout_max_cv_pct = 25.0               # [초안 D-48] 걷기 묶음으로 인정하는 걸음 간격 CV 상한
+bout_min_height_frac = 0.5           # [초안 D-48] 걷기 묶음의 봉우리 높이 중앙값 하한(가장 큰 묶음 대비)
 
 [sync]
 tol_pct = 3.0                        # [확정] 동조율 기준 ±3%
@@ -72,6 +75,7 @@ over_sync_frac = 0.80                # [확정] 일상 보행인데 ±3% 안 걸
 default_offset_s = 3.0               # [초안] 기록 시작부터 첫 곡 재생까지(manifest에 없을 때)
 offset_sensitivity_s = 5.0           # [초안] 오프셋 민감도 분석 폭 ±
 tempo_file_step_bpm = 5              # [확정] 챌린지 음원은 5 BPM 간격
+tempo_file_range_bpm = [100, 245]    # [확정 11/9] 챌린지 음원 범위(5 BPM 간격 30개, 180·195% 포함)
 
 [speed]
 doppler_max_speed_accuracy_ms = 0.5  # [초안] 속도 정확도가 이보다 나쁜 위치 샘플은 뺀다
@@ -84,18 +88,38 @@ min_duration_s = 0.030               # [확정] 30 ms 이상
 
 [exp2]
 stage_ratios_pct = [100, 120, 135, 150, 165]   # [확정]
+stage_ratios_extra_pct = [180, 195]  # [확정 11/9] 165%에서도 걸은 사람만 현장에서 더 한다
+extra_stage_repeats = 1              # [확정 11/9] 180·195%는 1회씩
 course_m = 40                        # [확정]
 analysis_m = 30                      # [확정] 가운데 30 m
 central_step_frac = 0.75             # [초안] 영상 창이 없을 때 걸음 열의 가운데 비율
 h1_2_min_sync_frac = 0.80            # [확정] 가설 1-2: 100·120% 단계에서 ±3% 안 걸음 80% 이상
 pc_field_tol_spm = 2.0               # [초안] 기록지 pc_field_spm과 재계산 값 차이 경고 기준
-min_interval_s = 0.25                # [초안 D-45] 실험 2의 걸음 간격 하한·검출 최소 간격(240 spm)
+min_interval_s = 0.25                # [초안 D-56] 실험 2의 걸음 간격 하한·검출 최소 간격(240 spm)
+
+[jump]                               # 수직 점프 (SPEC §4.6, §5.7)
+n_jumps = 3                          # [확정 11/9] 기록 하나에 3회
+min_flight_s = 0.20                  # [초안 D-37] 이보다 짧은 체공은 점프로 보지 않는다(높이 4.9 cm)
+quiet_s = 1.0                        # [초안 D-37] 적분 기준이 되는 점프 전 가만히 선 구간
+quiet_tol_g = 0.05                   # [초안 D-37] 가만히 선 구간의 |a_v,total - 1 g| 허용
+
+[run]                                # 달리기 단계의 스프링 지표 (SPEC §4.6, §5.7)
+gait_for_spring = ["run"]            # [초안 D-39] 이 영상 판정 단계만 표 4에 넣는다(mixed는 flag와 함께 계산만)
 
 [pendulum]
 k_over_L = 0.560                     # [확정] 엉덩관절 기준 회전반경 / 다리 길이 (계획서 3.6, Winter)
 d_over_L = 0.447                     # [확정] 질량중심 위치 / 다리 길이
 valid_error_pct = 15.0               # [확정] 흔들림 주기 예측-실측 평균 오차 15% 이내면 모델 타당
 gyro_lowpass_hz = 6.0                # [초안 D-24] 흔들림 주기 검출 전 자이로 저역 통과
+bent_knee_deg = 90.0                 # [확정 11/9] 무릎 굽힌 진자의 목표 각. 영상 마커로 잰 각이 있으면 그 값을 쓴다
+seg_thigh_mass_frac = 0.100          # [초안 D-41] 허벅지 질량 / 체중 (Dempster·Winter)
+seg_thigh_com_frac = 0.433           # [초안 D-41] 엉덩관절 -> 허벅지 질량중심 / 허벅지 길이
+seg_thigh_kcm_frac = 0.323           # [초안 D-41] 허벅지 질량중심 기준 회전반경 / 허벅지 길이
+seg_shank_mass_frac = 0.061          # [초안 D-41] 정강이+발 질량 / 체중
+seg_shank_com_frac = 0.606           # [초안 D-41] 무릎 -> 정강이+발 질량중심 / 정강이 길이
+seg_shank_kcm_frac = 0.416           # [초안 D-41] 정강이+발 질량중심 기준 회전반경 / 정강이 길이
+fallback_thigh_over_H = 0.245        # [초안 D-41] 허벅지 길이를 못 잰 경우 키에 곱함(flag)
+fallback_shank_over_H = 0.246        # [초안 D-41] 정강이 길이를 못 잰 경우 키에 곱함(flag)
 
 [stats]
 alpha = 0.05                         # [확정]
@@ -104,8 +128,18 @@ sd_ddof = 1                          # [초안] 표본 표준편차
 min_n_for_corr = 8                   # [초안 D-23] 구간 수가 이보다 적으면 상관을 판정하지 않는다
 same_tempo_pct = 5.0                 # [초안 D-11] 변동성 비교에서 '같은 템포'로 보는 T 차이(%p)
 froude_walk_run = 0.5                # [확정] 걷기-달리기 전환 Froude 수
-decomp_min_dlnv = 0.03               # [초안 D-50] 속도 분해 기여율을 낼 최소 |Δln v|
+sesoi_floor_pct = 1.0                # [초안 D-33] 실질적 변화 기준(무음 C의 변동계수)의 하한
+bootstrap_n = 2000                   # [초안 D-34] 회차 단위 재표집 횟수
+bootstrap_seed = 20261109            # [초안 D-34]
+ci_level = 0.95                      # [초안 D-34]
+decomp_min_dlnv = 0.03               # [초안 D-61] 속도 분해 기여율을 낼 최소 |Δln v|
 
 [g2]                                 # 11/18 중간 판단용 시나리오 신호
 silent_cv_max_pct = 3.0              # [확정] 무음 케이던스 변동계수 3% 이하
 impact_cv_max_pct = 15.0             # [확정] 같은 조건 회차 간 충격 변동계수 15% 이하
+
+[com]                                # 몸 중심 수직 변위와 역진자 보폭 (SPEC §4.3)
+zh_correction = 1.0                  # [초안 D-40] 보정하지 않는다. GPS 보폭과의 비를 보고한다
+
+[freeze]                             # 분석 고정 (SPEC §6, D-35)
+tag = "analysis-freeze-g2"           # [초안 D-35] G2 전, 가설 결과를 처음 계산하기 전에 붙이는 git 태그

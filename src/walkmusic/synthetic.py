@@ -2,7 +2,7 @@
 
 형식: iOS·standardisation=false 시범 파일과 같다. 열 순서 time, seconds_elapsed, z, y, x.
 Accelerometer = 중력 제외(m/s²), Gravity = 땅 쪽 단위 벡터 × 9.80665(m/s²),
-AccelerometerUncalibrated = Accelerometer + Gravity를 g로(D-29). 좌표는 0 근처 가짜 값(SPEC §11).
+AccelerometerUncalibrated = Accelerometer + Gravity를 g로(D-44). 좌표는 0 근처 가짜 값(SPEC §11).
 같은 SynthSpec(시드 포함)이면 같은 바이트의 zip이 나온다.
 """
 

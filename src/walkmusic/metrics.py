@@ -1,6 +1,6 @@
 """지표 계산 순수 함수 (SPEC §4, §9). 파일을 읽거나 쓰지 않는다.
 
-실험 2·3 식(Fr, 체공, 진자, 음원 반올림)은 DECISIONS D-41에 따라 Phase 1에서는 함수만 둔다.
+실험 2·3 식(Fr, 체공, 진자, 음원 반올림)은 DECISIONS D-53에 따라 Phase 1에서는 함수만 둔다.
 """
 
 from __future__ import annotations

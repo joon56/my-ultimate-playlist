@@ -1,8 +1,8 @@
-"""Sensor Logger zip 읽기와 시간축 (SPEC §3.1, §5.1, DECISIONS D-27·D-28·D-32).
+"""Sensor Logger zip 읽기와 시간축 (SPEC §3.1, §5.1, DECISIONS D-27·D-43·D-47).
 
 - zip은 풀지 않고 읽는다. 열은 이름으로 읽는다(실제 파일은 z, y, x 순서).
 - 시간축 t_s = (time − 기록 시작) ÷ 1e9. 기록 시작은 Metadata의 recording epoch time,
-  없으면 IMU 파일 첫 time의 최솟값(Location·Pedometer 제외, D-28).
+  없으면 IMU 파일 첫 time의 최솟값(Location·Pedometer 제외, D-43).
 - Metadata의 device name·device id는 읽자마자 버린다. 좌표 값은 반환 객체에 남지만 출력하지 않는다.
 """
 
@@ -115,7 +115,7 @@ def read_zip(path: str | Path, params: Params | None = None) -> Recording:
         out = df.drop(columns=[c for c in ("time", "seconds_elapsed") if c in df.columns])
         out.insert(0, "t_s", (df["time"].to_numpy("int64") - epoch) / 1e9)
         if name == "Location":
-            keep = out["t_s"].to_numpy() >= 0  # 기록 전 위치 점은 버린다(D-28)
+            keep = out["t_s"].to_numpy() >= 0  # 기록 전 위치 점은 버린다(D-43)
             dropped[name] = int((~keep).sum())
             out = out[keep].copy()
             for c in ("speed", "speedAccuracy"):

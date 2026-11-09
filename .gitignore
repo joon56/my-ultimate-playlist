@@ -6,6 +6,12 @@ data/interim/*
 data/private/*
 !data/private/.gitkeep
 
+# 영상(얼굴이 나온다). 영상에서 읽은 값만 data/video_*.csv로 둔다
+*.mp4
+*.MP4
+*.mov
+*.MOV
+
 # 다시 만들 수 있는 결과
 results/figures/
 results/steps/

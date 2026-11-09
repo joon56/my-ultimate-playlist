@@ -12,7 +12,7 @@ dependencies = [
     "pandas",
     "scipy",
     "matplotlib",
-    "tomli; python_version < '3.11'",  # DECISIONS D-40
+    "tomli; python_version < '3.11'",  # DECISIONS D-52
 ]
 
 [project.optional-dependencies]

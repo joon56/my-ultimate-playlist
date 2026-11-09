@@ -1,4 +1,4 @@
-"""걸음 검출 수용 기준(SPEC §5.4)과 출발·도착(D-36), 실제 파일 확인."""
+"""걸음 검출 수용 기준(SPEC §5.4)과 출발·도착(D-29), 실제 파일 확인."""
 
 import numpy as np
 import pytest
@@ -40,7 +40,7 @@ def test_standing_handling_and_prewalk_excluded(make_synth, params, signal, orie
 
 @pytest.mark.parametrize("signal", SIGNALS)
 def test_large_fidget_is_not_steps(make_synth, params, signal):
-    """바지 주머니 시범처럼 서 있는 동안 큰 흔들림이 있어도 걸음으로 세지 않는다(D-33)."""
+    """바지 주머니 시범처럼 서 있는 동안 큰 흔들림이 있어도 걸음으로 세지 않는다(D-48)."""
     path, truth = make_synth(walk_s=60, fidget_bumps=6, fidget_g=0.3, seed=5)
     _, res = analyze_recording(read_zip(path), params, signal)
     for a, b in (truth.stand_start, truth.stand_end):

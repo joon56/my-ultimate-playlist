@@ -1,16 +1,18 @@
 # CLAUDE.md — 워크 뮤직 분석 저장소
 
-연세대 Healthcare Biomechanics 팀 프로젝트(A·B·C 3명)의 데이터 분석 저장소다. 주제는 「내 플레이리스트가 걸음을 바꾼다 — 음악 템포에 따른 보행 동조와 진자 역학」. 폰(Sensor Logger) 센서 데이터로 케이던스, 동조율, 속도, 충격, 체공, 진자 주기를 계산하고, 가설 1–4를 사람별로 판정하고, 논문과 발표용 표·그림을 만든다.
+연세대 Healthcare Biomechanics 팀 프로젝트(A·B·C 3명)의 데이터 분석 저장소다. 주제는 「내 플레이리스트가 걸음을 바꾼다 — 음악 템포에 따른 보행 동조와 진자 역학」. 폰(Sensor Logger) 센서 데이터로 케이던스, 동조율, 속도, 충격, 체공, 점프, 다리 강성, 진자 주기(곧은·굽힌 다리)를 계산하고, 가설 1–4를 사람별로 판정하고, 측정 검증표·처방 범위와 논문·발표용 표·그림을 만든다.
 사용자는 팀장 A다. 한국어로 답한다. 일정: G1 11/12 · G2 11/18 · G3 11/24(데이터 동결) · G4 11/28 · 발표 11/30 · 논문 12/15.
 
 ## 먼저 읽을 것 (필요한 절만 읽는다)
 
 - `docs/SPEC.md` — 정의, 처리 순서, 출력 파일, 테스트 수치(§9). 가장 중요하다.
 - `docs/PROTOCOL.md` — 데이터를 어떻게 모았는지(해석에 필요하다)
-- `docs/QA_CHECKLIST.md` — 품질 검사 Q01–Q15, 관문 G1–G3 기준
+- `docs/QA_CHECKLIST.md` — 품질 검사 Q01–Q17, 관문 G1–G3 기준
 - `docs/DECISIONS.md` — 열린 결정과 변경 기록. 새 결정은 여기에 적는다
 - `docs/DATA_FACTS.md` — 실제 파일에서 확인한 사실(Phase 0에서 채운다)
 - `docs/CHECKLIST.md` — 열린 할 일과 결정 대기(K-xx). 사용자가 답하거나 해결·변경되면 그 항목을 지운다(결정은 DECISIONS.md, 사실은 DATA_FACTS.md로 옮긴 뒤)
+- `docs/HANDCALC.md` — 손계산 노트(교안 예제와 같은 계산을 우리 데이터로). 숫자는 SPEC §9 테스트와 같다
+- `docs/CHANGES_1108.md`, `docs/CHANGES_1109.md` — 규칙이 바뀐 날의 기록(무엇이 왜 바뀌었는지)
 - `data/README.md` — CSV 열 설명 · `config/params.toml` — 모든 문턱과 파라미터
 
 ## 어기면 안 되는 것
@@ -18,6 +20,7 @@
 - IMPORTANT: `data/raw/`는 읽기 전용이다. zip은 `data/interim/`에 풀어서 쓴다. 원본을 고치거나 옮기거나 지우지 않는다.
 - IMPORTANT: 위도·경도 값을 화면, 로그, 커밋, 그림, 문서에 쓰지 않는다. 계산에는 쓰되 결과에는 거리·속도·시각만 남긴다. 기기 이름도 적지 않는다.
 - IMPORTANT: SPEC §4의 정의와 [확정] 값은 결과를 보기 전에 정해 둔 것이다. 결과가 가설에 맞게 나오도록 정의, 문턱, 제외 규칙을 바꾸지 않는다. 바꿔야 할 것 같으면 멈추고 사용자에게 묻고 `docs/DECISIONS.md`에 적는다.
+- IMPORTANT: 분석 고정(SPEC §6 '분석 고정', DECISIONS D-35). git 태그 `analysis-freeze-g2`를 붙이기 전에는 실제 음악 회차로 가설 결과(T·ΔC%·R·S3 요약, 상관, `hypotheses.csv`, 그림 2·3)를 계산하거나 보여 주지 않는다. 걸음 검출·QA 조정은 무음·사전 점검(TEST)·합성 데이터로 한다. 태그는 사용자 승인 후에 붙이고, 태그 뒤에 정의·문턱·제외 규칙을 바꾸면 DECISIONS에 적고 바꾸기 전후 결과를 모두 보고한다.
 - IMPORTANT: 숫자를 지어내지 않는다. 필요한 값이 비어 있으면 멈추고 묻는다. `data/music_bpm.csv`의 `duration_s`가 비어 있으면 곡 구간을 계산하지 말고 알린다. 센서 단위와 부호도 가정하지 말고 데이터로 판별한다(SPEC §5.2).
 - 기호: T는 템포 비율(%)만, P는 다리 흔들림 주기(s)만, t는 시간, PC는 평소 케이던스다. 변수 이름은 풀어 쓴다(`tempo_ratio_pct`, `swing_period_s`). 케이던스 단위는 걸음/분(spm)이다.
 - n=3이라 집단 검정(Wilcoxon, Friedman, ANOVA 등)을 쓰지 않는다. 사람별로 판정하고, 3명 중 2명(가설 4는 3명)이 같으면 '지지'다.
@@ -39,9 +42,9 @@
 
 - `pytest` · `ruff check .`
 - `python -m walkmusic inspect <zip>` — 파일 구조와 시간·샘플링 요약(좌표 출력 없음)
-- `python -m walkmusic qa <zip>` · `qa --all` · `qa --gate G1 [--synthetic]` — 품질 검사 Q01–Q15, 관문 표
+- `python -m walkmusic qa <zip>` · `qa --all` · `qa --gate G1 [--synthetic]` — 품질 검사 Q01–Q17(Q16·Q17은 아직 구현 전), 관문 표
 - `python -m walkmusic all` — 처리부터 표·그림까지 한 번에(같은 입력이면 같은 출력). Phase 2에서 만든다
 
 ## 지금 상태
 
-Phase 0 끝(2026-11-07 시범 파일 `TEST_A_1107`, 2026-11-08 A의 사전 점검 3개: DATA_FACTS §10, DECISIONS D-27–D-38). Phase 1 끝(2026-11-08): `inspect`·`qa`(Q01–Q15, `--gate G1`, `--synthetic`), 단위 판별, 걸음 검출 초안, 합성 zip 생성기, §9 테스트. 다음은 Phase 2(곡 구간 지표, PC, 판정, 그림 2·3)이고 계획 승인부터 한다. B·C 사전 점검이 남았다. 실험 1은 11/9부터, 실험 2·3은 11/14다.
+Phase 0 끝(2026-11-07 시범 파일 `TEST_A_1107`, 2026-11-08 A의 사전 점검 3개: DATA_FACTS §10, DECISIONS D-27·D-29·D-30·D-43–D-51). Phase 1 끝(2026-11-08): `inspect`·`qa`(Q01–Q15, `--gate G1`, `--synthetic`), 단위 판별, 걸음 검출 초안, 합성 zip 생성기, §9 테스트. 2026-11-09: 문서를 키트 11/9판(SPEC v0.3)으로 맞췄다(D-33–D-42 추가, 이 저장소에서 따로 매긴 결정은 D-43–D-63으로 다시 매김, `docs/CHANGES_1109.md`). Q16·Q17과 11/9에 더한 지표(점프, 달리기 스프링, 분절 진자, 검증 세트)는 아직 구현 전이다. 다음은 Phase 2(곡 구간 지표, PC, 판정, 그림 2·3)이고 계획 승인부터 한다. B·C 사전 점검이 남았다. 실험 1은 11/9부터, 실험 2·3은 11/14다.

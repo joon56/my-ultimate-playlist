@@ -1,4 +1,4 @@
-"""걸음 검출과 출발·도착 (SPEC §5.4, §5.5(a), DECISIONS D-02·D-09·D-21·D-33·D-36).
+"""걸음 검출과 출발·도착 (SPEC §5.4, §5.5(a), DECISIONS D-02·D-09·D-21·D-48·D-29).
 
 1. 신호: 총 가속도 크기(steps.signal = magnitude) 또는 수직 성분(vertical), 단위 g.
 2. 끊김을 가로지르지 않는 균일 격자 → 영위상 대역 통과(steps.detect_band_hz).
@@ -6,7 +6,7 @@
    봉우리 시각은 포물선 보간으로 샘플 사이까지 잡는다.
 4. 묶음: 간격 > exclude.stop_gap_s에서 나눈다. 걷기 묶음 = 걸음 exclude.min_bout_steps 이상,
    간격 CV ≤ steps.bout_max_cv_pct, 봉우리 높이 중앙값 ≥ steps.bout_min_height_frac × 가장 큰 묶음의 값.
-5. 출발·도착(D-36): 기록 처음·끝 exclude.stand_search_s 안에서 1 s 움직임이 걷는 동안 중앙값의
+5. 출발·도착(D-29): 기록 처음·끝 exclude.stand_search_s 안에서 1 s 움직임이 걷는 동안 중앙값의
    exclude.stand_min_s 이상 stand_motion_frac 미만인 구간(서 있기)을 찾고, 그 사이의 걷기 걸음만 쓴다.
    서 있기가 없으면 첫·마지막 걷기 묶음(D-21)으로 정하고 flags에 남긴다.
 """
@@ -161,7 +161,7 @@ def detect_steps(t: np.ndarray, total_g: np.ndarray, gravity: np.ndarray, params
     if not bouts:
         return StepResult(kind, st, h, bouts, rejected, None, None, float("nan"), float("nan"), ["no_walking"])
 
-    # 서 있기와 출발·도착(D-36)
+    # 서 있기와 출발·도착(D-29)
     in_walk = np.zeros(len(secs), bool)
     for a, b, _ in bouts:
         in_walk |= (secs >= np.floor(a)) & (secs < b)

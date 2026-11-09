@@ -1,4 +1,4 @@
-"""SPEC §9 예제 수치 (DECISIONS D-41: #7·#8 제외)."""
+"""SPEC §9 예제 수치 (DECISIONS D-53: #7·#8 제외)."""
 
 import math
 

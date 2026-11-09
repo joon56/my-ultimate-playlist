@@ -201,7 +201,7 @@ def check_walk(w: Walk, tables: dict[str, pd.DataFrame], params: Params) -> list
         note=f"확신 {u.confidence}")
     stand = (f"시작 {stp.stand_start}, 끝 {stp.stand_end}, 출발 {t_dep:.1f} s, 도착 {t_arr:.1f} s"
              + (f", {', '.join(stp.flags)}" if stp.flags else ""))
-    # Q05 시작·끝 서 있기(D-36)
+    # Q05 시작·끝 서 있기(D-29)
     ok5 = stp.stand_start is not None and stp.stand_end is not None
     add("Q05", ("PASS" if ok5 else "WARN") if exp == "E1" else "NA", stand, f"≥ {params['exclude.stand_min_s']} s",
         "" if exp == "E1" else "E1만 판정")
@@ -214,7 +214,7 @@ def check_walk(w: Walk, tables: dict[str, pd.DataFrame], params: Params) -> list
             f"검출 {det} / 직접 {hand}", f"±{params['qa.hand_count_tol_steps']}", f"창 {win[0]:.1f}–{win[1]:.1f} s")
     else:
         add("Q06", "NA", f"검출 {det}", note="직접 센 값 없음")
-    # Q07 Pedometer(D-37 열림: 직접 센 값과 크게 다를 수 있다)
+    # Q07 Pedometer(D-30 열림: 직접 센 값과 크게 다를 수 있다)
     if exp in ("E1", "T") and rec.has("Pedometer"):
         pt, pv = rec.t("Pedometer"), rec.sensors["Pedometer"]["steps"].to_numpy(float)
         inside = np.where((pt >= win[0]) & (pt <= win[1]))[0]
@@ -225,7 +225,7 @@ def check_walk(w: Walk, tables: dict[str, pd.DataFrame], params: Params) -> list
             rel = (d7 - ped) / ped * 100 if ped else float("nan")
             add("Q07", "PASS" if abs(rel) <= params["qa.pedometer_tol_pct"] else "WARN",
                 f"검출 {d7} / Pedometer {ped:.0f} ({rel:+.1f}%)", f"±{params['qa.pedometer_tol_pct']}%",
-                f"갱신 {ua:.1f}–{ub:.1f} s. D-37: Pedometer는 기준이 아니다")
+                f"갱신 {ua:.1f}–{ub:.1f} s. D-30: Pedometer는 기준이 아니다")
         else:
             add("Q07", "NA", note="창 안 Pedometer 갱신 부족")
     else:
@@ -388,7 +388,7 @@ def run_checks(rows: list[dict], paths: Paths, params: Params) -> tuple[list[Che
 
 
 def gate_g1(checks: list[Check], manifest: pd.DataFrame) -> pd.DataFrame:
-    """관문 G1 표(사람 × 항목, QA_CHECKLIST §3). 100걸음은 사전 점검 파일로 본다(D-39)."""
+    """관문 G1 표(사람 × 항목, QA_CHECKLIST §3). 100걸음은 사전 점검 파일로 본다(D-27)."""
     by = {(c.walk_id, c.check_id): c.status for c in checks}
     rows = []
     for p in sorted({r for r in manifest.get("participant", []) if r}):

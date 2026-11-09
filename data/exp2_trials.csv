@@ -1,1 +1,1 @@
-trial_id,runner,ratio_pct,repeat,bpm_played,direction,pc_field_spm,t30_s,steps_N,gait_video,zip_file,t_in_sensor_s,t_out_sensor_s,notes
+trial_id,runner,ratio_pct,repeat,bpm_played,direction,pc_field_spm,t30_s,steps_N,gait_video,zip_file,t_in_sensor_s,t_out_sensor_s,notes,video_file,video_fps
