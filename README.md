@@ -1,65 +1,164 @@
-# walk-music — 내 플레이리스트가 걸음을 바꾼다 (분석 저장소)
+<div align="center">
 
-연세대 Healthcare Biomechanics 팀 프로젝트(A·B·C)의 데이터 분석 저장소다. 폰의 Sensor Logger 기록에서 케이던스, 음악 동조율, 속도·보폭, 발 디딤 충격, 체공, 점프·다리 강성, 다리 진자 주기(곧은·굽힌 다리)를 계산하고, 가설 1–4를 사람별로 판정하고, 논문과 발표용 표·그림을 만든다. 팀 문서 「내 플레이리스트가 걸음을 바꾼다 — 프로젝트 통합본」의 연구계획, 실험 1 프로토콜, 실행 스케줄 탭에서 분석에 필요한 부분을 옮긴 것이 `docs/`다.
+<img src="docs/assets/banner.svg" alt="walk-music: equalizer bars whose accented beats line up with the step peaks of a walking signal, next to a swinging leg pendulum" width="100%">
 
-## 시작하기
+# My Playlist Changes My Walk
 
-1. 이 폴더를 풀어 Claude Code의 작업 폴더로 쓴다. `.claude`와 `.gitignore`는 점으로 시작해 탐색기에서 숨겨져 있을 수 있으니 지우지 않는다. `git init`을 한 뒤 올린다면 **비공개 저장소**로만 올린다(데이터에 평소 걷는 길이 들어 있다).
-2. 시범 측정 zip을 `data/raw/`에 넣고 읽기 전용으로 잠근다. macOS·Linux는 `chmod -R a-w data/raw`, Windows는 폴더 속성에서 읽기 전용으로 바꾼다.
-3. 이 폴더에서 Claude Code를 열고 `START_PROMPT.md`의 프롬프트를 붙여 넣는다.
-4. Claude Code가 계획을 보여주면 읽고 승인한다. 이후 순서는 아래 로드맵과 같다.
+**Does the tempo of a song pull our footsteps along?**<br>A sensor-based gait study — and the open analysis pipeline behind it.
 
-## 폴더
+**English** · [한국어](README.ko.md)
 
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](pyproject.toml) [![Built with](https://img.shields.io/badge/built%20with-NumPy%20%C2%B7%20pandas%20%C2%B7%20SciPy-013243?style=flat-square&logo=numpy&logoColor=white)](pyproject.toml) [![Tests: pytest](https://img.shields.io/badge/tests-pytest-0A9EDC?style=flat-square&logo=pytest&logoColor=white)](tests) [![Lint: ruff](https://img.shields.io/badge/lint-ruff-D7FF64?style=flat-square&logo=ruff&logoColor=black)](pyproject.toml) [![Data: Sensor Logger](https://img.shields.io/badge/data-Sensor%20Logger-7C3AED?style=flat-square)](docs/SPEC.md) [![Docs: Korean](https://img.shields.io/badge/docs-Korean-10B981?style=flat-square)](docs)
+
+[The study](#the-study) · [Pipeline](#pipeline) · [Quick start](#quick-start) · [Documentation](#documentation) · [Status](#status) · [Privacy](#privacy)
+
+</div>
+
+---
+
+## The study
+
+Three teammates carry a phone in a waist pouch and walk the same route again and again — first in silence, then to playlists of different tempi. The phone logs 100 Hz motion and GPS. This repository turns those recordings into numbers: **how often we step, how tightly steps lock onto the beat, how fast we go, how hard the heel lands, and how a swinging leg behaves like a pendulum.**
+
+|  | **Experiment 1** · Everyday walking | **Experiment 2** · Tempo challenge | **Experiment 3** · Leg pendulum |
+|---|---|---|---|
+| **Who** | 3 walkers (A · B · C) | same 3 | same 3 |
+| **Task** | 15 walks each on a usual route, 8+ min: 3 silent + 4 playlists × 3. No instructions | Step to a beat at 100–195 % of one's preferred cadence (PC) over a 40 m course — walking or running — then 3 vertical jumps | Swing the leg freely: straight × 3, knee bent ≈ 90° × 3 |
+| **Phone** | waist pouch, back, landscape | waist pouch | band on the shank |
+| **When** | Nov 9–22, 2026 | Nov 14 | Nov 14 |
+| **Produces** | per-song cadence, beat-sync rate, speed, step length, impact | sync rate, flight time, Froude number, running leg stiffness, jump height | swing period vs. pendulum model, pendulum energy |
+
+The four playlists hold three songs each and span roughly 100–132 BPM, around a typical walking cadence.
+
+### Hypotheses
+
+| | Claim |
+|---|---|
+| **H1** | When a song's BPM is within ±10 % of one's preferred cadence, steps drift toward the beat without being told to. |
+| **H1-2** | When asked to match the beat, people follow it up to +20 %. |
+| **H2** | Faster songs bring faster walking, longer steps and harder impact; forcing the match raises step-to-step variability. |
+| **H3** | Walking turns into running near a Froude number of 0.5. |
+| **H4** | A straight leg swung as a pendulum predicts a cadence *below* the real preferred cadence. |
+
+With only three walkers, each hypothesis is judged **person by person**: supported when at least two of three agree (H4 needs all three).
+
+> [!IMPORTANT]
+> **There are no hypothesis results yet — on purpose.** Definitions and thresholds were written down before the data came in. Results for the music walks are not computed until the code and parameters are frozen under a git tag (`analysis-freeze-g2`). Until then, development uses silent walks, pre-check recordings and synthetic signals only.
+
+## Pipeline
+
+```mermaid
+flowchart LR
+    A["📱 Sensor Logger zip<br/>100 Hz IMU · GPS · pedometer"] --> B["🔎 inspect and QA<br/>quality checks · gates"]
+    B --> C["👣 step detection<br/>band-pass · adaptive threshold"]
+    C --> D["📐 metrics<br/>cadence · sync · speed · impact"]
+    D --> E["📊 verdicts · tables · figures"]
+    classDef done fill:#1e3a8a,stroke:#60a5fa,color:#ffffff
+    classDef todo fill:#374151,stroke:#9ca3af,color:#ffffff,stroke-dasharray: 5 5
+    class A,B,C done
+    class D,E todo
 ```
-walk-music/
-├─ CLAUDE.md            Claude Code가 매 세션 읽는 규칙
-├─ START_PROMPT.md      처음 붙여 넣을 프롬프트
-├─ docs/
-│  ├─ SPEC.md           분석 명세: 정의, 처리 순서, 출력, 테스트 수치
-│  ├─ PROTOCOL.md       실험 절차 요약
-│  ├─ QA_CHECKLIST.md   품질 검사 Q01–Q17, 관문 G1–G3 기준
-│  ├─ DECISIONS.md      열린 결정과 변경 기록
-│  ├─ DATA_FACTS.md     실제 파일에서 확인한 사실(Phase 0에서 채움)
-│  ├─ HANDCALC.md       손계산 노트(교안 예제 ↔ 우리 데이터, SPEC §9와 같은 숫자)
-│  ├─ CHANGES_1108.md   11/8 프로토콜 수정판에 따라 바뀐 문서 목록과 적용 방법
-│  └─ CHANGES_1109.md   11/9 추가(점프·180·195%·굽힌 진자·측정 검증·결과 전 기준)와 적용 방법
-├─ config/params.toml   모든 문턱과 파라미터
-├─ data/                CSV 템플릿과 설명(data/README.md). raw/, interim/, private/는 git 제외
-├─ tools/assign.py      회차 배정표 재현 스크립트
-├─ results/             결과(Phase 1부터)
-└─ .claude/settings.json  권한 설정
+
+*Blue = implemented, grey = planned (Phase 2 and later).*
+
+- **Quality checks** — 17 specified per walk (file set, sampling gaps, duration, standing windows, units, GPS vs. map distance, zip ↔ logbook link, …), 15 implemented, plus three review gates (G1–G3).
+- **Step detection** — zero-phase band-pass (0.8–5 Hz), adaptive threshold, parabolic peak interpolation; standing phases at the start and end are found and trimmed.
+- **Nothing assumed about the phone** — units, gravity handling and sign conventions are decided from the data, and the vertical axis comes from the gravity vector, so portrait or landscape carrying makes no difference.
+- **Synthetic recordings with known truth** — a generator produces Sensor Logger zips (steps, standing phases, fidgeting, gaps, orientations) so detectors are tested against the ground truth.
+
+## Quick start
+
+```bash
+git clone https://github.com/joon56/my-ultimate-playlist.git
+cd my-ultimate-playlist
+
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+
+pytest                             # worked examples from the spec + synthetic-signal tests
+python -m walkmusic qa --gate G1 --synthetic     # try the quality gate on generated demo walks
 ```
 
-Phase 1에서 `pyproject.toml`, `src/walkmusic/`, `tests/`가 생긴다.
+> [!TIP]
+> No recordings are needed. The tests and the demo generate synthetic walks; tests that need the private pilot recordings skip themselves when `data/raw/` is empty.
 
-## 사람이 채울 것
+### Commands
 
-| 누가 | 무엇을 | 언제까지 |
-|---|---|---|
-| C | `data/music_bpm.csv`의 곡 길이(`duration_s`)와 박 세기(`bpm_count_1`, `bpm_count_2`) | 11/9 전 |
-| 각자 | `data/participants.csv`: 나이, 키, 체중, 폰 기종, 폰 위치, 측정 구간 거리 | 11/9 전 |
-| 각자 | `data/private/sections.csv`: 측정 구간 시작·끝 좌표(`sections.example.csv` 형식) | 11/9 전 |
-| 각자 | `participants.csv`의 다리 길이(대전자~바닥), 허벅지 길이(대전자~무릎 관절선), 정강이 길이(무릎 관절선~바깥 복사뼈) | 11/14 |
-| B | `docs/DECISIONS.md`의 결과 전 기준 D-33–D-36(실질적 변화·신뢰구간·분석 고정·처방 범위) 확인 | G1(11/12) 전 |
-| B(카메라 담당 메모로) | `data/video_checks.csv`(점프 체공 프레임, 진자 10번 흔들림 시간), `data/video_markers.csv`(착지·굽힌 무릎 마커 좌표) | 11/18, 11/22 |
-| 각자 | `data/debrief.csv` 종료 설문 한 줄 | 15회를 마친 날 |
-| B | `docs/DECISIONS.md`의 11/9 전 항목(D-01, D-03, D-04, D-05, D-10, D-13) 확인 | 11/9 전 |
-| 걷는 사람 | 걸을 때마다 `manifest.csv` 한 줄(구글 시트 기록지를 내려받아 맞춰 둔다). 기록 시작 날짜·시각(시:분)을 정확히 적고, zip은 내보낸 이름 그대로 `data/raw/<사람>/`에 둔다 | 걸은 날 안에 |
+| Command | What it does |
+|---|---|
+| `python -m walkmusic inspect <zip>` | File structure, timing and sampling of one recording (never prints coordinates) |
+| `python -m walkmusic qa <zip>` · `qa --all` | Quality checks for one recording or every walk in `data/manifest.csv` |
+| `python -m walkmusic qa --links` | Propose which zip belongs to which logbook row, matched by start time |
+| `python -m walkmusic qa --gate G1 [--synthetic]` | Gate table per person; `--synthetic` runs on generated demo data |
+| *(Phase 2)* `process` · `stats` · `figures` · `freeze` · `all` | Metrics, verdicts, figures, data freeze — one command to rebuild everything |
 
-## 로드맵
+## Repository layout
 
-| Phase | 기간 | 내용 |
-|---|---|---|
-| 0 | 11/7–11/8 | 시범 측정 파일에서 데이터 사실 확인 |
-| 1 | ~11/12 (G1) | 뼈대, 불러오기, 품질 검사, 걸음 검출 초안, 합성 데이터 생성기 |
-| 2 | ~11/18 (G2) | 실험 1 지표, 평소 케이던스, 가설 판정, 시나리오 신호, 그림 2·3 |
-| 3 | 11/14 데이터 ~11/18 | 실험 2·3 |
-| 4 | ~11/24 (G3) | 전체 표·그림, 데이터 표 v1.0 동결 |
-| 5 | 11/24 이후, 요청할 때만 | 웹 데모 |
+```text
+.
+├─ src/walkmusic/        analysis package: reading, QA, step detection, units, metrics, synthetic data
+├─ tests/                pytest suite: spec worked examples, synthetic-signal cases, QA cases
+├─ config/params.toml    every threshold and parameter, each tagged [confirmed] / [draft] with a decision ID
+├─ data/                 CSV templates and column docs (raw recordings and coordinates are git-ignored)
+├─ docs/                 specification, protocol, QA checklist, decision log (Korean)
+├─ tools/assign.py       reproducible walk-order assignment
+├─ results/              generated outputs (re-creatable ones are git-ignored)
+├─ CLAUDE.md             standing rules for the Claude Code assistant used on this project
+└─ START_PROMPT.md       prompts used to brief that assistant
+```
 
-자세한 완료 기준은 `docs/SPEC.md` §12.
+## Documentation
 
-## 개인정보
+> [!NOTE]
+> The working language of the team is Korean, so the documents below are written in Korean. Section numbers, decision IDs (`D-01` …) and parameter names are stable, so they are easy to follow from this page.
 
-위치 기록에는 집과 학교를 잇는 평소 길이 그대로 들어 있다. 좌표는 속도·거리 계산에만 쓰고 결과, 로그, 그림, 커밋에 남기지 않는다. `data/raw`, `data/interim`, `data/private`는 `.gitignore`로 제외했다. 기기 이름 같은 식별 정보는 문서에 쓰지 않는다. 보강 참가자(친구)의 데이터는 동의 범위 안에서 ID(N1–N4)로만 다룬다.
+| Document | What it holds |
+|---|---|
+| [`docs/SPEC.md`](docs/SPEC.md) | Analysis specification: definitions, processing order, outputs, test numbers |
+| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | Field protocol for the three experiments |
+| [`docs/QA_CHECKLIST.md`](docs/QA_CHECKLIST.md) | Quality checks Q01–Q17 and gate criteria G1–G3 |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Decision log: every default, who approved it, and every later change |
+| [`docs/DATA_FACTS.md`](docs/DATA_FACTS.md) | Facts verified on real recordings (units, clocks, sampling, quirks) |
+| [`docs/HANDCALC.md`](docs/HANDCALC.md) | Hand calculations that match the test numbers |
+| [`docs/CHECKLIST.md`](docs/CHECKLIST.md) | Open to-dos |
+| [`data/README.md`](data/README.md) | Column reference for every CSV |
+
+## How the analysis stays honest
+
+- **Fixed before the data.** Items marked *confirmed* come from the study plan and are never changed by code. *Draft* defaults carry a decision ID, and after real data has been seen they change only through a logged entry that also reports the results from before the change.
+- **A decision log, not silent edits.** If the spec looks wrong while coding, the doubt goes into `docs/DECISIONS.md` first.
+- **An analysis freeze.** Hypothesis results for the music walks are computed only after the freeze tag exists.
+- **Executable spec.** The worked examples in the spec — and the hand calculations used in the report — are tests; code and hand calculation must agree.
+- **Rebuildable.** The goal is one command from recordings to every table and figure, with fixed random seeds.
+
+## Status
+
+| Phase | When | Scope | Status |
+|:-:|---|---|:-:|
+| 0 | Nov 7–8 | Verify data facts on pilot recordings | ✅ |
+| 1 | by Nov 12 · gate G1 | Package skeleton, loading, QA, step-detection draft, synthetic-data generator | ✅ |
+| 2 | by Nov 18 · gate G2 | Experiment 1 metrics, preferred cadence, verdicts, first figures | 🚧 |
+| 3 | data Nov 14 → Nov 22 | Experiments 2–3: tempo stages, jumps, running-leg stiffness, straight and bent-knee pendulum, measurement validation, prescription range | ⏳ |
+| 4 | by Nov 24 · gate G3 | Full tables and figures; data tables frozen as v1.0 | ⏳ |
+| 5 | after Nov 24, on request | Web demo reusing the same Python code | 💤 |
+
+✅ done · 🚧 next · ⏳ planned · 💤 optional. Data collection for Experiment 1 is under way (Nov 9–22). Details and completion criteria: [`docs/SPEC.md` §12](docs/SPEC.md).
+
+## Privacy
+
+> [!WARNING]
+> This repository is **public**. A location track follows everyday routes, so raw data never goes into it.
+
+- Raw recordings (`data/raw/`), unpacked files (`data/interim/`), route coordinates (`data/private/`) and videos are git-ignored and are not in the repository history.
+- Coordinates are used only to compute distance, speed and time. Results and logs never contain latitude or longitude, and quality check Q15 scans the outputs for leaks.
+- Device names and IDs are dropped the moment a recording is read.
+- People appear only as A, B and C. Optional extra volunteers would be handled only as N1–N4, within their consent.
+
+---
+
+<div align="center">
+
+<sub>Recordings are made with the <a href="https://www.tszheichoi.com/sensorlogger">Sensor Logger</a> app. A Healthcare Biomechanics team project at Yonsei University. Developed together with the Claude Code assistant.</sub>
+
+</div>
