@@ -17,14 +17,14 @@ CSV는 UTF-8(BOM 없음)이다. 구글 시트에서 내려받았을 때 BOM이 �
 |---|---|---|---|
 | `assignment.csv` | 회차 배정표(고정). `tools/assign.py`로 재현된다 | 만들어 둠 | — |
 | `manifest.csv` | 실험 1 기록지(회차당 1줄)와 시범·사전 점검 기록 | 걷는 사람, A가 점검 | 걸은 날 안에 |
-| `participants.csv` | 사람 정보 | 각자 | 나이·키·체중·폰·측정 구간 거리는 11/9 전, 다리·허벅지·정강이 길이는 11/14 |
+| `participants.csv` | 사람 정보 | 각자 | 나이·키·체중·폰·측정 구간 거리는 11/9 전, 다리·허벅지·정강이 길이는 11/21 |
 | `music_bpm.csv` | 곡 12+2: BPM, **곡 길이** | C | `duration_s`는 11/9 전 |
 | `song_ratings.csv` | 곡별 좋아하는 정도·아는 정도 | 각자 | 처음 듣고 바로 |
 | `exclusions.csv` | 수동 제외 구간(계단·인파·폰 만짐) | 걷는 사람 | 걸은 뒤 |
-| `exp2_trials.csv` | 챌린지 기록지(180·195% 단계, 점프 기록 포함) | 현장 기록 담당 | 11/14 |
-| `exp3_swings.csv` | 진자 시행 목록(곧은·굽힌 다리) | 현장 | 11/14 |
-| `video_checks.csv` | 영상에서 읽은 시간 값(점프 체공 프레임, 진자 10번 흔들림 시간) | 카메라 담당의 메모를 B가 옮김 | 11/18 |
-| `video_markers.csv` | 영상 프레임의 테이프 마커 좌표(착지 순간, 굽힌 다리 진자) | B 또는 C | 11/22 |
+| `exp2_trials.csv` | 챌린지 기록지(180·195% 단계, 점프 기록 포함) | 현장 기록 담당 | 11/21(예비일 11/22) |
+| `exp3_swings.csv` | 진자 시행 목록(곧은·굽힌 다리) | 현장 | 11/21(예비일 11/22) |
+| `video_checks.csv` | 영상에서 읽은 시간 값(점프 체공 프레임, 진자 10번 흔들림 시간) | 카메라 담당의 메모를 B가 옮김 | 11/23 |
+| `video_markers.csv` | 영상 프레임의 테이프 마커 좌표(착지 순간, 굽힌 다리 진자) | B 또는 C | 11/23 |
 | `debrief.csv` | 종료 설문(15회를 마친 뒤 한 번) | 각자 | 15회를 마친 날 |
 | `sections.example.csv` | 측정 구간 좌표 예시(가짜 값) | — | — |
 | `private/sections.csv` | 측정 구간 좌표(실제) | 각자 | 11/9 전 |
@@ -63,7 +63,7 @@ CSV는 UTF-8(BOM 없음)이다. 구글 시트에서 내려받았을 때 BOM이 �
 
 ### participants.csv
 
-`participant`, `role`, `age`, `height_cm`, `mass_kg`, `leg_length_m`(대전자~바닥 높이, 미터), `phone_model`(기종만. 기기 이름이 아니다), `phone_os`(iOS/Android와 버전), `carry_position`(예: 허리 파우치, 등 쪽·가로), `earphones`, `section_distance_m`(측정 구간 거리, 지도앱 거리재기), `notes`, `thigh_length_m`(대전자~무릎 바깥 관절선, 미터), `shank_length_m`(무릎 관절선~바깥 복사뼈, 미터). 뒤의 두 열은 11/9에 맨 끝에 더했고 11/14에 잰다.
+`participant`, `role`, `age`, `height_cm`, `mass_kg`, `leg_length_m`(대전자~바닥 높이, 미터), `phone_model`(기종만. 기기 이름이 아니다), `phone_os`(iOS/Android와 버전), `carry_position`(예: 허리 파우치, 등 쪽·가로), `earphones`, `section_distance_m`(측정 구간 거리, 지도앱 거리재기), `notes`, `thigh_length_m`(대전자~무릎 바깥 관절선, 미터), `shank_length_m`(무릎 관절선~바깥 복사뼈, 미터). 뒤의 두 열은 11/9에 맨 끝에 더했고 11/21에 잰다.
 
 ### music_bpm.csv
 

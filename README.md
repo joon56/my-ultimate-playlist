@@ -25,7 +25,7 @@ Three teammates carry a phone in a waist pouch and walk the same route again and
 | **Who** | 3 walkers (A · B · C) | same 3 | same 3 |
 | **Task** | 15 walks each on a usual route, 8+ min: 3 silent + 4 playlists × 3. No instructions | Step to a beat at 100–195 % of one's preferred cadence (PC) over a 40 m course — walking or running — then 3 vertical jumps | Swing the leg freely: straight × 3, knee bent ≈ 90° × 3 |
 | **Phone** | waist pouch, back, landscape | waist pouch | band on the shank |
-| **When** | Nov 9–22, 2026 | Nov 14 | Nov 14 |
+| **When** | Nov 9–22, 2026 | Nov 21 (reserve Nov 22) | Nov 21 |
 | **Produces** | per-song cadence, beat-sync rate, speed, step length, impact | sync rate, flight time, Froude number, running leg stiffness, jump height | swing period vs. pendulum model, pendulum energy |
 
 The four playlists hold three songs each and span roughly 100–132 BPM, around a typical walking cadence.
@@ -139,7 +139,7 @@ python -m walkmusic qa --gate G1 --synthetic     # try the quality gate on gener
 | 0 | Nov 7–8 | Verify data facts on pilot recordings | ✅ |
 | 1 | by Nov 12 · gate G1 | Package skeleton, loading, QA, step-detection draft, synthetic-data generator | ✅ |
 | 2 | by Nov 18 · gate G2 | Experiment 1 metrics, preferred cadence, verdicts, first figures | 🚧 |
-| 3 | data Nov 14 → Nov 22 | Experiments 2–3: tempo stages, jumps, running-leg stiffness, straight and bent-knee pendulum, measurement validation, prescription range | ⏳ |
+| 3 | data Nov 21 → Nov 24 | Experiments 2–3: tempo stages, jumps, running-leg stiffness, straight and bent-knee pendulum, measurement validation, prescription range | ⏳ |
 | 4 | by Nov 24 · gate G3 | Full tables and figures; data tables frozen as v1.0 | ⏳ |
 | 5 | after Nov 24, on request | Web demo reusing the same Python code | 💤 |
 
