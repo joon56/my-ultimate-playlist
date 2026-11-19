@@ -12,13 +12,10 @@ data/private/*
 *.mov
 *.MOV
 
-# 다시 만들 수 있는 결과
-results/figures/
-results/qa/
-results/qa_summary.csv
-results/zip_links.csv
-results/gate_G1.csv
-results/steps/
+# 다시 만들 수 있는 결과(D-64). 남길 결과는 G3에서 results/frozen/으로 동결한다
+results/*
+!results/.gitkeep
+!results/frozen/
 results_synthetic/
 
 # Python
