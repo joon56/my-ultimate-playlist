@@ -238,3 +238,239 @@ def write_zip(path: str | Path, spec: SynthSpec) -> SynthTruth:
             z.writestr(info, files[name])
     Path(path).write_bytes(buf.getvalue())
     return truth
+
+
+# --- 실험 3 · 다리 진자 (SPEC §10: 알려진 흔들림 주기의 합성 자이로) ---
+
+
+@dataclass
+class SwingSpec:
+    """합성 진자 기록 하나(정강이에 붙인 폰). 시간 s, 각속도 rad/s."""
+
+    period_s: float = 1.55
+    omega_amp_rad_s: float = 2.0
+    swing_s: float = 20.0
+    decay_per_s: float = 0.02          # 진폭이 e^(−decay·t)로 줄어든다
+    handling_s: float = 3.0            # 처음·끝에 폰을 만지는 시간(세 축 모두 크게 흔들림)
+    still_s: float = 2.0               # 흔들기 전후 가만히
+    handling_rad_s: float = 1.5
+    noise_rad_s: float = 0.03
+    axis: tuple[float, float, float] = (0.25, 0.92, 0.30)  # 흔들림 회전축(폰 좌표)
+    fs_hz: float = 99.58
+    epoch_ms: int = 1_800_000_000_000
+    seed: int = 0
+
+
+def make_swing_gyro(spec: SwingSpec) -> tuple[np.ndarray, np.ndarray, dict]:
+    """(t_s, Gyroscope N×3 rad/s, 정답). 정답 amp_deg는 흔들기 가운데 시각의 진폭(ω 진폭 × P ÷ 2π)."""
+    rng = np.random.default_rng(spec.seed)
+    t0 = spec.handling_s + spec.still_s
+    duration = t0 + spec.swing_s + spec.still_s + spec.handling_s
+    dt = 1.0 / spec.fs_hz
+    t = 0.058 + np.arange(int((duration - 0.058) / dt)) * dt
+    tau = t - t0
+    on = (tau >= 0) & (tau <= spec.swing_s)
+    w = np.where(on, spec.omega_amp_rad_s * np.exp(-spec.decay_per_s * tau) * np.sin(2 * np.pi * tau / spec.period_s),
+                 0.0)
+    axis = np.asarray(spec.axis, float) / np.linalg.norm(spec.axis)
+    gyro = np.outer(w, axis) + spec.noise_rad_s * rng.standard_normal((len(t), 3))
+    hand = (t < spec.handling_s) | (t > duration - spec.handling_s)
+    gyro[hand] += spec.handling_rad_s * rng.standard_normal((int(hand.sum()), 3))
+    amp_mid = spec.omega_amp_rad_s * np.exp(-spec.decay_per_s * spec.swing_s / 2) * spec.period_s / (2 * np.pi)
+    truth = dict(period_s=spec.period_s, amp_deg=float(np.degrees(amp_mid)), swing_t0_s=t0,
+                 swing_t1_s=t0 + spec.swing_s)
+    return t, gyro, truth
+
+
+# --- 수직 점프 (SPEC §10: 알려진 체공 시간·이륙 속도의 합성 가속도) ---
+
+
+@dataclass
+class JumpSpec:
+    """합성 점프 기록 하나(허리 파우치). 몸 중심 수직 가속도를 구간마다 식으로 만든다(시간 s, 가속도 m/s²).
+
+    반동(unweight_s 동안 −unweight_ms2 sin) → 밀기(push_s, 끝에서 지면반력 0) → 체공(flight) → 착지(land_s).
+    밀기의 크기는 이륙 속도 g t_f ÷ 2가 되도록 정한다.
+    """
+
+    flight_times_s: tuple[float, ...] = (0.50, 0.46, 0.52)
+    unweight_s: float = 0.35
+    unweight_ms2: float = 6.0
+    push_s: float = 0.40
+    land_s: float = 0.25
+    quiet_s: float = 2.0
+    rest_s: float = 15.0
+    handling_s: float = 3.0
+    noise_g: float = 0.01
+    orientation: str = "landscape"
+    fs_hz: float = 99.58
+    epoch_ms: int = 1_800_000_000_000
+    seed: int = 0
+
+
+def _jump_accel(tau: np.ndarray, spec: JumpSpec, flight_s: float) -> np.ndarray:
+    """점프 하나의 몸 중심 수직 가속도(m/s²). tau = 반동 시작부터의 시간."""
+    g = G0
+    t1, t2, t3 = spec.unweight_s, spec.push_s, spec.land_s
+    v_to = g * flight_s / 2
+    a1 = spec.unweight_ms2
+    a2 = (v_to + 2 * a1 * t1 / np.pi + g * t2 / 5) * np.pi / (2 * t2)
+    a3 = (v_to + g * t3 / 2) * np.pi / (2 * t3)
+    to, land = t1 + t2, t1 + t2 + flight_s
+    a = np.zeros_like(tau)
+    s = (tau >= 0) & (tau < t1)
+    a[s] = -a1 * np.sin(np.pi * tau[s] / t1)
+    s = (tau >= t1) & (tau < to)
+    u = (tau[s] - t1) / t2
+    a[s] = a2 * np.sin(np.pi * u) - g * u**4
+    a[(tau >= to) & (tau < land)] = -g
+    s = (tau >= land) & (tau < land + t3)
+    u = (tau[s] - land) / t3
+    a[s] = -g * (1 - (3 * u**2 - 2 * u**3)) + a3 * np.sin(np.pi * u)
+    return a
+
+
+def make_jump_imu(spec: JumpSpec) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[dict]]:
+    """(t_s, 총 가속도 g N×3(몸 축: 앞뒤·좌우·위), Gravity N×3 m/s², 점프마다 정답).
+
+    정답: takeoff_s, landing_s, flight_s, v_takeoff_ms, lowest_s(적분 속도가 0을 위로 지난 시각), pushoff_s.
+    """
+    rng = np.random.default_rng(spec.seed)
+    one = spec.unweight_s + spec.push_s + max(spec.flight_times_s) + spec.land_s
+    starts = [spec.handling_s + spec.quiet_s + k * (spec.quiet_s + one + spec.rest_s)
+              for k in range(len(spec.flight_times_s))]
+    duration = starts[-1] + one + spec.quiet_s + spec.handling_s
+    dt = 1.0 / spec.fs_hz
+    t = 0.058 + np.arange(int((duration - 0.058) / dt)) * dt
+    a = np.zeros_like(t)
+    truth = []
+    fine = np.arange(0.0, one, 1e-4)
+    for t0, tf in zip(starts, spec.flight_times_s, strict=True):
+        a += _jump_accel(t - t0, spec, tf)
+        af = _jump_accel(fine, spec, tf)
+        v = np.cumsum(af) * 1e-4
+        to = t0 + spec.unweight_s + spec.push_s
+        up = np.where((v[:-1] <= 0) & (v[1:] > 0) & (fine[1:] < to - t0))[0]
+        low = t0 + fine[up[-1] + 1]
+        f = 1.0 + af / G0  # 정의(SPEC §4.6)대로 0.2 g 문턱을 지나는 시각과 그때의 속도
+        below = np.where(f < 0.2)[0]
+        i_to = below[0]
+        i_land = below[-1] + 1
+        truth.append(dict(takeoff_s=to, landing_s=to + tf, flight_s=tf, v_takeoff_ms=G0 * tf / 2, lowest_s=low,
+                          pushoff_s=to - low, takeoff_thr_s=t0 + fine[i_to], flight_thr_s=fine[i_land] - fine[i_to],
+                          v_thr_ms=float(v[i_to]), pushoff_thr_s=t0 + fine[i_to] - low))
+    up = 1.0 + a / G0
+    hand = (t < spec.handling_s) | (t > duration - spec.handling_s)
+    f_body = np.column_stack([np.zeros_like(t), np.zeros_like(t), up])
+    f_body[hand] += 0.15 * rng.standard_normal((int(hand.sum()), 3))
+    f_body += spec.noise_g * rng.standard_normal(f_body.shape)
+    gravity = np.tile([0.0, 0.0, -G0], (len(t), 1))
+    return t, f_body, gravity, truth
+
+
+# --- 실험 2 시행 하나: 싱크 점프 3번 → 걷기 또는 달리기 (D-55) ---
+
+
+@dataclass
+class TrialSpec:
+    """합성 실험 2 시행(허리 파우치). 달리기(run)면 걸음마다 접촉(반 사인파 지면반력)과 체공 flight_s가 번갈아 온다."""
+
+    cadence_spm: float = 130.0
+    n_steps: int = 60
+    run: bool = False
+    flight_s: float = 0.10
+    amp_g: float = 0.5
+    interval_cv_pct: float = 1.0
+    sync_flight_s: float = 0.25
+    n_sync: int = 3
+    handling_s: float = 2.0
+    stand_s: float = 3.0
+    noise_g: float = 0.01
+    fs_hz: float = 99.58
+    epoch_ms: int = 1_800_000_000_000
+    seed: int = 0
+
+
+def make_trial_imu(spec: TrialSpec) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
+    """(t_s, 총 가속도 g N×3(몸 축), Gravity N×3, 정답).
+
+    정답: sync_landing_s(싱크 점프 착지 시각들), step_times_s, flight_thr_s(달리기 체공을 0.2 g 문턱으로 잰 길이),
+    contact_thr_s, cadence_spm.
+    """
+    rng = np.random.default_rng(spec.seed)
+    hop = JumpSpec(unweight_s=0.25, unweight_ms2=4.0, push_s=0.30, land_s=0.20)
+    hop_len = hop.unweight_s + hop.push_s + spec.sync_flight_s + hop.land_s
+    hops = [spec.handling_s + spec.stand_s + k * (hop_len + 0.8) for k in range(spec.n_sync)]
+    t_go = (hops[-1] + hop_len if hops else spec.handling_s) + spec.stand_s
+    period = 60.0 / spec.cadence_spm
+    steps = t_go + np.concatenate([[0.0], np.cumsum(period * (1 + spec.interval_cv_pct / 100
+                                                              * rng.standard_normal(spec.n_steps - 1)))])
+    duration = steps[-1] + period + spec.stand_s + spec.handling_s
+    dt = 1.0 / spec.fs_hz
+    t = 0.058 + np.arange(int((duration - 0.058) / dt)) * dt
+    a = np.zeros_like(t)
+    for h0 in hops:
+        a += _jump_accel(t - h0, hop, spec.sync_flight_s)
+    up = 1.0 + a / G0
+    truth = dict(sync_landing_s=[h0 + hop.unweight_s + hop.push_s + spec.sync_flight_s for h0 in hops],
+                 cadence_spm=spec.cadence_spm, flight_thr_s=np.nan, contact_thr_s=np.nan)
+    if spec.run:
+        tc = period - spec.flight_s
+        peak = np.pi / 2 * period / tc  # 접촉 중 반 사인파, 한 걸음 평균 1 g
+        f_run = np.zeros_like(t)
+        for s0 in steps:
+            sel = (t >= s0) & (t < s0 + tc)
+            f_run[sel] = peak * np.sin(np.pi * (t[sel] - s0) / tc)
+        run_on = (t >= steps[0]) & (t < steps[-1] + tc)
+        up[run_on] = f_run[run_on]
+        off = tc / np.pi * np.arcsin(0.2 / peak)  # 접촉 시작·끝에서 0.2 g를 지나는 시각의 차이
+        truth.update(step_times_s=steps + tc / 2, flight_thr_s=spec.flight_s + 2 * off, contact_thr_s=tc - 2 * off)
+        ap_ml = np.zeros((len(t), 2))
+    else:
+        amps = spec.amp_g * (1 + 0.1 * rng.standard_normal(len(steps)))
+        fb = _body_force(t, steps, amps, spec.cadence_spm)
+        up += fb[:, 2]
+        ap_ml = fb[:, :2]
+        truth.update(step_times_s=steps)
+    f_body = np.column_stack([ap_ml, up])
+    hand = (t < spec.handling_s) | (t > duration - spec.handling_s)
+    f_body[hand] += 0.15 * rng.standard_normal((int(hand.sum()), 3))
+    f_body += spec.noise_g * rng.standard_normal(f_body.shape)
+    return t, f_body, np.tile([0.0, 0.0, -G0], (len(t), 1)), truth
+
+
+def write_imu_zip(path: str | Path, t: np.ndarray, f_body_g: np.ndarray, gyro: np.ndarray | None = None,
+                  orientation: str = "landscape", epoch_ms: int = 1_800_000_000_000) -> None:
+    """몸 축 비력(g)과 자이로(rad/s)를 Sensor Logger 형식 zip으로(위치·걸음 수 파일 없음, 실험 2·3용)."""
+    rot = Rotation.from_matrix(FRAMES[orientation])
+    f_dev = rot.apply(f_body_g)
+    down = rot.apply(np.tile([0.0, 0.0, -1.0], (len(t), 1)))
+    reading = -f_dev
+    grav = G0 * down
+    accel = G0 * reading - grav
+    gyro = np.zeros((len(t), 3)) if gyro is None else gyro
+    epoch_ns = epoch_ms * 10**6
+    time_ns = epoch_ns + np.round(t * 1e9).astype("int64")
+
+    def imu_csv(v: np.ndarray) -> bytes:
+        df = pd.DataFrame({"time": time_ns, "seconds_elapsed": np.round(t, 6), "z": v[:, 2], "y": v[:, 1],
+                           "x": v[:, 0]})
+        return df.to_csv(index=False, float_format="%.9g", lineterminator="\n").encode()
+
+    files = {"Accelerometer.csv": imu_csv(accel), "Gravity.csv": imu_csv(grav), "Gyroscope.csv": imu_csv(gyro),
+             "AccelerometerUncalibrated.csv": imu_csv(reading), "GyroscopeUncalibrated.csv": imu_csv(gyro + 0.004)}
+    rec_time = pd.Timestamp(epoch_ns, unit="ns", tz="UTC").strftime("%Y-%m-%d_%H-%M-%S")
+    meta = pd.DataFrame([{"version": "3", "device name": "SYNTHETIC-DEVICE", "recording epoch time": epoch_ms,
+                          "recording time": rec_time, "recording timezone": "Asia/Seoul", "platform": "ios",
+                          "appVersion": "1.68.1", "device id": "00000000-SYNTH-0000",
+                          "sensors": "Accelerometer|Gravity|Gyroscope|GyroscopeUncalibrated|AccelerometerUncalibrated",
+                          "sampleRateMs": "10|10|10|10|10", "standardisation": "false",
+                          "platform version": "26.2.1"}])
+    files["Metadata.csv"] = meta.to_csv(index=False, lineterminator="\n").encode().rstrip(b"\n")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        for name in sorted(files):
+            info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            z.writestr(info, files[name])
+    Path(path).write_bytes(buf.getvalue())

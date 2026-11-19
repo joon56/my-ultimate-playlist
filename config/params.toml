@@ -99,6 +99,9 @@ central_step_frac = 0.75             # [초안] 영상 창이 없을 때 걸음 
 h1_2_min_sync_frac = 0.80            # [확정] 가설 1-2: 100·120% 단계에서 ±3% 안 걸음 80% 이상
 pc_field_tol_spm = 2.0               # [초안] 기록지 pc_field_spm과 재계산 값 차이 경고 기준
 min_interval_s = 0.23                # [초안 D-56] 실험 2의 걸음 간격 하한·검출 최소 간격(약 261 spm, 245 BPM +3%까지. 2026-11-09 0.25에서 내림)
+n_sync_jumps = 3                     # [확정 PROTOCOL 3.5·D-55] 시행 시작의 싱크 점프 수(영상 동기)
+sensor_run_frac = 0.5                # [초안 D-73] 체공이 있는 걸음 비율이 이 이상이면 센서 판정 run, 0이면 walk, 사이는 mixed(영상 판정과 비교만, gait_mismatch)
+link_swing_min_omega_rad_s = 1.0     # [초안 D-73] zip 연결 제안에서 진자 기록으로 볼 최소 각속도 봉우리(허리 파우치 걷기의 골반 회전은 약 0.6 rad/s). 분석에는 쓰지 않는다
 
 [jump]                               # 수직 점프 (SPEC §4.6, §5.7)
 n_jumps = 3                          # [확정 11/9] 기록 하나에 3회
@@ -123,6 +126,14 @@ seg_shank_com_frac = 0.606           # [초안 D-41] 무릎 -> 정강이+발 질
 seg_shank_kcm_frac = 0.416           # [초안 D-41] 정강이+발 질량중심 기준 회전반경 / 정강이 길이
 fallback_thigh_over_H = 0.245        # [초안 D-41] 허벅지 길이를 못 잰 경우 키에 곱함(flag)
 fallback_shank_over_H = 0.246        # [초안 D-41] 정강이 길이를 못 잰 경우 키에 곱함(flag)
+min_cycles = 10                      # [확정 D-58] 한 시행에서 이어진 흔들림이 10주기 미만이면 다시 한다(flags=few_cycles)
+filter_order = 2                     # [초안 D-73] 자이로 저역 통과(Butterworth) 차수
+min_period_s = 0.6                   # [초안 D-73] 같은 방향 봉우리 간격으로 받는 범위(예측 주기 약 1.2–1.8 s)
+max_period_s = 3.0                   # [초안 D-73]
+rms_window_s = 3.0                   # [초안 D-73] 봉우리 높이 기준이 되는 이동 RMS 창
+peak_height_frac = 0.5               # [초안 D-73] 봉우리 높이 ≥ 이 비율 × √2 × 이동 RMS(골 근처 잔물결을 거른다)
+min_peak_rad_s = 0.3                 # [초안 D-73] 봉우리 최소 각속도(가만히 있을 때 잡음 약 0.03, 진폭 10°·주기 1.5 s면 0.73 rad/s)
+regular_tol_frac = 0.25              # [초안 D-73] 이어진 흔들림으로 보는 간격 허용(사슬 중앙값 대비 비율)
 
 [stats]
 alpha = 0.05                         # [확정]

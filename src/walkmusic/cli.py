@@ -1,6 +1,7 @@
-"""명령줄: ``python -m walkmusic inspect|qa|process|stats|all``.
+"""명령줄: ``python -m walkmusic inspect|qa|process|stats|all|exp23``.
 
-process·stats·all은 실험 1이다. 실제 데이터는 분석 고정 태그가 있어야 돈다(D-35). figures·freeze는 아직 없다.
+process·stats·all은 실험 1, exp23은 실험 2·3이다. 실제 데이터는 분석 고정 태그가 있어야 돈다(D-35).
+figures·freeze는 아직 없다.
 좌표 값과 기기 이름은 어떤 출력에도 쓰지 않는다.
 """
 
@@ -34,7 +35,50 @@ def _build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--synthetic", action="store_true", help="합성 자료로(results_synthetic/exp1/에만 쓴다)")
         sp.add_argument("--allow-unfrozen", action="store_true",
                         help="분석 고정 태그 없이 실제 데이터로 돌린다(run_info.json에 unfrozen=true, D-35)")
+
+    p23 = sub.add_parser("exp23", help="실험 2·3: 시행·단계·점프·진자 표, 가설 1-2·2(변동성)·3·4 판정, 현장 점검 표")
+    p23.add_argument("--synthetic", action="store_true", help="합성 자료로(results_synthetic/exp23/에만 쓴다)")
+    p23.add_argument("--allow-unfrozen", action="store_true",
+                     help="분석 고정 태그 없이 실제 데이터로 돌린다(run_info_exp23.json에 unfrozen=true, D-35)")
+    p23.add_argument("--links", action="store_true",
+                     help="zip_file이 빈 기록지 줄에 기록 시작 순서로 zip을 맞춘 제안만 낸다"
+                          "(results/exp23_links.csv, D-55)")
+    p23.add_argument("--date", help="--links에서 이 날짜(YYYY-MM-DD, 현지 시각)에 기록한 zip만 본다")
     return ap
+
+
+def _run_exp23(synthetic: bool, allow_unfrozen: bool, links: bool, date: str | None) -> int:
+    from walkmusic.config import ROOT, load_params
+    from walkmusic.exp23 import Paths23, field_report, make_synthetic_exp23, propose_links23, run_exp23
+    from walkmusic.stats import FreezeError
+
+    params = load_params()
+    if synthetic:
+        root = ROOT / "results_synthetic" / "exp23"
+        paths = Paths23.under(root)
+        if not (paths.data / "exp2_trials.csv").exists():
+            print("합성 실험 2·3 자료를 만든다(처음 한 번)")
+            make_synthetic_exp23(root, params)
+    else:
+        paths = Paths23.real()
+    if links:
+        df = propose_links23(paths, params, date)
+        paths.results.mkdir(parents=True, exist_ok=True)
+        df.to_csv(paths.results / "exp23_links.csv", index=False, lineterminator="\n")
+        print(df.to_string(index=False) if len(df) else "제안할 zip이 없다(zip_file이 빈 줄이나 남은 zip이 없음)")
+        print(f"→ {paths.results / 'exp23_links.csv'} (제안이다. 확인한 뒤 기록지의 zip_file을 채운다)")
+        return 0
+    try:
+        res = run_exp23(paths, params, real=not synthetic, allow_unfrozen=allow_unfrozen)
+    except FreezeError as e:
+        print(e)
+        return 3
+    print(field_report(res))
+    print(f"결과 → {paths.results}")
+    for r in res["hypotheses"]:
+        if r["participant"] == "ALL":
+            print(f"{r['hypothesis']}: 집단 {r['supported']} ({r['note']})")
+    return 0
 
 
 def _run_exp1(command: str, synthetic: bool, allow_unfrozen: bool) -> int:
@@ -85,6 +129,8 @@ def main(argv: list[str] | None = None) -> int:
                        synthetic=args.synthetic, links=args.links)
     if args.command in ("process", "stats", "all"):
         return _run_exp1(args.command, args.synthetic, args.allow_unfrozen)
+    if args.command == "exp23":
+        return _run_exp23(args.synthetic, args.allow_unfrozen, args.links, args.date)
     return 2  # pragma: no cover
 
 

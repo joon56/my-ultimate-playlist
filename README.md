@@ -92,6 +92,8 @@ python -m walkmusic qa --gate G1 --synthetic     # try the quality gate on gener
 | `python -m walkmusic qa --links` | Propose which zip belongs to which logbook row, matched by start time |
 | `python -m walkmusic qa --gate G1 [--synthetic]` | Gate table per person; `--synthetic` runs on generated demo data |
 | `python -m walkmusic all [--synthetic]` (`process` · `stats`) | Experiment 1 song segments, per-walk and per-person tables, hypothesis verdicts. Real data runs only after the analysis freeze tag |
+| `python -m walkmusic exp23 [--synthetic]` | Experiments 2–3: tempo-challenge trials and stages, vertical jumps, leg pendulum, verdicts for H1-2, H3, H4 and a short same-day field check |
+| `python -m walkmusic exp23 --links` | Propose which zip belongs to which challenge or pendulum row, by recording order |
 | *(next)* `figures` · `freeze` | Figures and the final data freeze |
 
 ## Repository layout
@@ -140,7 +142,7 @@ python -m walkmusic qa --gate G1 --synthetic     # try the quality gate on gener
 | 0 | Nov 7–8 | Verify data facts on pilot recordings | ✅ |
 | 1 | by Nov 12 · gate G1 | Package skeleton, loading, QA, step-detection draft, synthetic-data generator | ✅ |
 | 2 | by Nov 18 · gate G2 | Experiment 1 metrics, preferred cadence, verdicts, first figures | 🚧 |
-| 3 | data Nov 21 → Nov 24 | Experiments 2–3: tempo stages, jumps, running-leg stiffness, straight and bent-knee pendulum, measurement validation, prescription range | ⏳ |
+| 3 | data Nov 21 → Nov 24 | Experiments 2–3: tempo stages, jumps, running-leg stiffness, straight and bent-knee pendulum, measurement validation, prescription range | 🚧 |
 | 4 | by Nov 24 · gate G3 | Full tables and figures; data tables frozen as v1.0 | ⏳ |
 | 5 | after Nov 24, on request | Web demo reusing the same Python code | 💤 |
 

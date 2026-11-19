@@ -1,0 +1,282 @@
+"""실험 2: 템포 챌린지 (SPEC §4.4–4.6, §5.7, DECISIONS D-04·D-10·D-13·D-39·D-54·D-55·D-56·D-57·D-73).
+
+원칙: 기록지 값(t30, N, 걷기/뛰기)은 사람이 읽은 값, 센서 값(체공, 충격, 센서 케이던스)은 코드가 낸 값.
+한 표에 나란히 둔다.
+
+시행 하나(센서):
+1. 걸음 검출은 실험 1과 같고 걸음 간격 하한만 `exp2.min_interval_s`(0.23 s, D-56).
+2. 시행 = 걸음이 가장 많은 걷기 묶음. 싱크 점프 = 그 앞의 체공(§4.4) 가운데 마지막 `exp2.n_sync_jumps`개,
+   착지 시각을 `sync_jumps_sensor_s`로 낸다(영상 시각을 센서 시각으로 옮길 때 쓴다).
+3. 분석 창: 기록지의 `t_in_sensor_s`~`t_out_sensor_s`가 있으면 그 창, 없으면 그 묶음 걸음의 가운데
+   `exp2.central_step_frac`(75%)이고 flags=central_steps(D-13).
+4. 창 안 유효 간격(0.23–`steps.max_interval_s`)으로 케이던스, S3·S5·반/두 배 박자, CV, 충격 중앙값.
+5. 체공: 창 안 체공 이벤트를 걸음 간격마다 더한 t_f, 접촉 t_c = 간격 − t_f. 체공 있는 걸음 비율, 체공·접촉 중앙값.
+   센서 판정: 비율 ≥ `exp2.sensor_run_frac`이면 run, 0이면 walk, 사이는 mixed. 영상과 다르면 gait_mismatch.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+
+from walkmusic.config import Params
+from walkmusic.exp1 import _lowpass, _step_impacts
+from walkmusic.exp3 import _uniform
+from walkmusic.jumps import _crossing
+from walkmusic.metrics import flight_events, froude, running_flight, spring_mass, sync_counts
+from walkmusic.orientation import vertical_signal
+from walkmusic.stats import _row
+from walkmusic.steps import detect_steps
+
+NAN = float("nan")
+MEAN_COLS = ("bpm_played", "tempo_ratio_pct", "v_ms", "cadence_record_spm", "cadence_median_spm", "cadence_rate_spm",
+             "sync3_pct", "sync5_pct", "sync3_half_pct", "sync3_double_pct", "cv_pct", "impact_g", "flight_step_frac",
+             "flight_time_median_s", "rise_height_m", "contact_time_s", "dC_pct")
+
+
+def exp2_params(params: Params) -> Params:
+    """실험 2용 설정: 걸음 간격 하한(검출 최소 간격 포함)만 `exp2.min_interval_s`로(D-56)."""
+    return params.with_overrides({"steps.min_interval_s": params["exp2.min_interval_s"]})
+
+
+def central_window(steps_t: np.ndarray, frac: float) -> tuple[float, float]:
+    """걸음 열의 가운데 frac 부분 [첫 걸음, 마지막 걸음] 시각(D-13). 양쪽에서 같은 수의 걸음을 뺀다."""
+    n = len(steps_t)
+    k = int(np.floor(n * (1 - frac) / 2))
+    return float(steps_t[k]), float(steps_t[n - 1 - k])
+
+
+def _flight_intervals(tg: np.ndarray, mag: np.ndarray, fs: float, params: Params) -> list[tuple[float, float]]:
+    thr = params["flight.a_thresh_g"]
+    return [(_crossing(tg, mag, i, thr), _crossing(tg, mag, j, thr))
+            for i, j in flight_events(mag, fs, thr, params["flight.min_duration_s"])]
+
+
+def analyze_trial(t: np.ndarray, total_g: np.ndarray, gravity: np.ndarray, params: Params, bpm: float = NAN,
+                  t_in: float = NAN, t_out: float = NAN) -> dict:
+    """실험 2 시행 하나의 센서 값. total_g는 총 가속도(g, N×3). bpm은 실제로 틀어 준 BPM(무음이면 NaN)."""
+    p2 = exp2_params(params)
+    st = detect_steps(t, total_g, gravity, p2)
+    out: dict = dict(n_steps_window=0, window_t0_s=NAN, window_t1_s=NAN, window_method="", cadence_median_spm=NAN,
+                     cadence_rate_spm=NAN, n_valid_intervals=0, sync3_pct=NAN, sync5_pct=NAN, sync3_half_pct=NAN,
+                     sync3_double_pct=NAN, cv_pct=NAN, impact_g=NAN, flight_step_frac=NAN,
+                     flight_time_median_s=NAN, contact_time_s=NAN, rise_height_m=NAN, sensor_gait="",
+                     n_sync_jumps=0, sync_jumps_sensor_s="", n_bouts=len(st.bouts), flags=[])
+    tg, x, fs = _uniform(np.asarray(t, float), np.column_stack([total_g, gravity]))
+    mag = np.linalg.norm(x[:, :3], axis=1)
+    flights = _flight_intervals(tg, mag, fs, params)
+    if not st.bouts:
+        out["flags"].append("no_walking")
+        return out
+    if len(st.bouts) > 1:
+        out["flags"].append("multiple_bouts")
+    b0, b1, _ = max(st.bouts, key=lambda b: b[2])
+    sync = [f for f in flights if f[1] < b0][-params["exp2.n_sync_jumps"]:]
+    out.update(n_sync_jumps=len(sync), sync_jumps_sensor_s=";".join(f"{f[1]:.3f}" for f in sync))
+    if len(sync) != params["exp2.n_sync_jumps"]:
+        out["flags"].append(f"sync_jumps_{len(sync)}")
+
+    bout = st.t_s[(st.t_s >= b0 - 1e-9) & (st.t_s <= b1 + 1e-9)]
+    if np.isfinite(t_in) and np.isfinite(t_out) and t_out > t_in:
+        w0, w1, method = float(t_in), float(t_out), "video"
+    else:
+        (w0, w1), method = central_window(bout, params["exp2.central_step_frac"]), "central_steps"
+        out["flags"].append("central_steps")
+    steps = st.t_s[(st.t_s >= w0 - 1e-9) & (st.t_s <= w1 + 1e-9)]
+    out.update(n_steps_window=len(steps), window_t0_s=w0, window_t1_s=w1, window_method=method)
+    if len(steps) < 3:
+        out["flags"].append("few_steps")
+        return out
+    iv = np.diff(steps)
+    valid = (iv >= params["exp2.min_interval_s"]) & (iv <= params["steps.max_interval_s"])
+    ok = iv[valid]
+    out["n_valid_intervals"] = len(ok)
+    if len(ok) >= 2:
+        c = 60.0 / ok
+        out.update(cadence_median_spm=float(np.median(c)), cadence_rate_spm=float(len(ok) / ok.sum() * 60),
+                   cv_pct=float(ok.std(ddof=params["stats.sd_ddof"]) / ok.mean() * 100))
+        if np.isfinite(bpm):
+            s3, s5 = sync_counts(c, bpm, params["sync.tol_pct"]), sync_counts(c, bpm, params["sync.tol_alt_pct"])
+            out.update(sync3_pct=s3["sync_pct"], sync5_pct=s5["sync_pct"], sync3_half_pct=s3["n_half"] / len(c) * 100,
+                       sync3_double_pct=s3["n_double"] / len(c) * 100)
+    av = vertical_signal(x[:, :3], x[:, 3:])
+    imp = _step_impacts(tg, _lowpass(tg, av, params["steps.impact_lowpass_hz"]), steps,
+                        params["steps.impact_window_s"])
+    out["impact_g"] = float(np.nanmedian(imp)) if np.isfinite(imp).any() else NAN
+
+    tf = np.zeros(len(iv))
+    for a, b in flights:
+        k = np.searchsorted(steps, a, side="right") - 1  # 체공이 시작된 걸음 간격
+        if 0 <= k < len(iv):
+            tf[k] += min(b, steps[k + 1]) - a
+    tf, ivv = tf[valid], iv[valid]
+    has = tf > 0
+    frac = float(has.mean()) if len(has) else NAN
+    out["flight_step_frac"] = frac
+    if has.any():
+        tfm = float(np.median(tf[has]))
+        out.update(flight_time_median_s=tfm, contact_time_s=float(np.median(ivv[has] - tf[has])),
+                   rise_height_m=params["constants.g"] * tfm**2 / 8)
+    out["sensor_gait"] = ("" if not np.isfinite(frac) else "run" if frac >= params["exp2.sensor_run_frac"]
+                          else "walk" if frac == 0 else "mixed")
+    out["_tf"], out["_tc"] = tf[has], ivv[has] - tf[has]  # 단계 중앙값용(표에는 쓰지 않는다)
+    return out
+
+
+def _num(x) -> float:
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return NAN
+
+
+def _ratio_key(r: str) -> float:
+    return _num(r) if str(r).replace(".", "", 1).isdigit() else -1.0
+
+
+def _gait(values: pd.Series) -> str:
+    v = {str(x).strip().lower() for x in values if str(x).strip()}
+    if not v:
+        return ""
+    return "walk" if v == {"walk"} else "run" if v == {"run"} else "mixed"
+
+
+def stage_summary(trials: pd.DataFrame, legs: dict[str, float], params: Params, sesoi: dict[str, float] | None = None,
+                  body: dict[str, dict] | None = None, phases: dict[str, tuple] | None = None) -> pd.DataFrame:
+    """시행 표 → 단계 표(사람 × 비율). 수치는 시행 평균, Fr는 평균 속도로(D-57), 평균 동조(D-54).
+
+    body가 있으면(사람 → mass_kg) 달리기 단계의 스프링 값을 단계 중앙값 t_c·t_f로 계산한다(D-39).
+    phases: trial_id → (t_f 배열, t_c 배열). 없으면 시행 중앙값의 평균을 쓴다.
+    """
+    g = params["constants.g"]
+    tol = params["sync.tol_pct"] / 100
+    cprim = "cadence_median_spm" if params["cadence.primary"] == "median" else "cadence_rate_spm"
+    rows = []
+    for (runner, ratio), d in trials.groupby(["runner", "ratio_pct"], sort=False):
+        row = dict(runner=runner, ratio_pct=str(ratio), n_trials=len(d))
+        for col in MEAN_COLS:
+            if col in d:
+                vals = pd.to_numeric(d[col], errors="coerce")
+                row[col] = float(vals.mean()) if vals.notna().any() else NAN
+        row["gait_video"] = _gait(d["gait_video"]) if "gait_video" in d else ""
+        leg = legs.get(runner, NAN)
+        v = row.get("v_ms", NAN)
+        row["fr"] = froude(v, leg, g) if np.isfinite(v) and np.isfinite(leg) else NAN
+        c, bpm = row.get(cprim, NAN), row.get("bpm_played", NAN)
+        row["mean_sync"] = bool(abs(c / bpm - 1) <= tol) if np.isfinite(c) and np.isfinite(bpm) else "NA"
+        s = (sesoi or {}).get(runner, NAN)
+        dc = row.get("dC_pct", NAN)
+        row["change_class"] = ("" if not (np.isfinite(dc) and np.isfinite(s)) else "within_band" if abs(dc) <= s
+                               else "meaningful_up" if dc > 0 else "meaningful_down")
+        flags = sorted({f for x in d.get("flags", pd.Series(dtype=str)).fillna("") for f in str(x).split(";") if f})
+        mass = (body or {}).get(runner, {}).get("mass_kg", NAN)
+        if row["gait_video"] in ("run", "mixed") and np.isfinite(mass) and np.isfinite(leg) and np.isfinite(v):
+            tf_all = np.concatenate([phases[i][0] for i in d.get("trial_id", []) if phases and i in phases] or [[]])
+            tc_all = np.concatenate([phases[i][1] for i in d.get("trial_id", []) if phases and i in phases] or [[]])
+            tfm = float(np.median(tf_all)) if len(tf_all) else row.get("flight_time_median_s", NAN)
+            tcm = float(np.median(tc_all)) if len(tc_all) else row.get("contact_time_s", NAN)
+            if np.isfinite(tfm) and np.isfinite(tcm):
+                row.update({k: val for k, val in spring_mass(mass, tcm, tfm, v, leg, g).items()
+                            if k in ("fmax_bw", "delta_y_m", "delta_l_m", "kvert_kn_m", "kleg_kn_m",
+                                     "elastic_energy_j", "mean_grf_contact_bw")})
+                row["takeoff_angle_deg"] = running_flight(v, tfm, g)["takeoff_angle_deg"]
+            if row["gait_video"] == "mixed":
+                flags.append("mixed_gait")
+        row["flags"] = ";".join(flags)
+        rows.append(row)
+    out = pd.DataFrame(rows)
+    if len(out):
+        out = out.assign(_k=out["ratio_pct"].map(_ratio_key)).sort_values(["runner", "_k"]).drop(columns="_k")
+    return out.reset_index(drop=True)
+
+
+def _stages(summary: pd.DataFrame, runner: str) -> pd.DataFrame:
+    s = summary[(summary["runner"] == runner) & (summary["ratio_pct"].map(_ratio_key) > 0)]
+    return s.assign(_k=s["ratio_pct"].map(_ratio_key)).sort_values("_k")
+
+
+def h12_rows(summary: pd.DataFrame, params: Params) -> list[dict]:
+    """가설 1-2(D-10): 100%와 120% 단계 각각에서 S3 ≥ `exp2.h1_2_min_sync_frac`. 평균 동조(D-54)는 함께 적는다."""
+    need = params["exp2.h1_2_min_sync_frac"] * 100
+    rows = []
+    for p in sorted(summary["runner"].unique()):
+        s = _stages(summary, p).set_index("ratio_pct")
+        have = [r for r in ("100", "120") if r in s.index and np.isfinite(_num(s.loc[r, "sync3_pct"]))]
+        note = "; ".join(f"{r}%: S3 {float(s.loc[r, 'sync3_pct']):.1f}%, 평균 동조 {s.loc[r, 'mean_sync']}"
+                         for r in have)
+        if len(have) < 2:
+            rows.append(_row("H1-2", p, "S3 at 100% and 120%", n=len(have), criterion=f"S3 >= {need:.0f}% at both",
+                             note=(note + "; " if note else "") + "100%·120% 단계가 다 있어야 판정한다"))
+            continue
+        vals = [float(s.loc[r, "sync3_pct"]) for r in have]
+        rows.append(_row("H1-2", p, "S3 at 100% and 120%", min(vals), n=2, criterion=f"S3 >= {need:.0f}% at both",
+                         supported=bool(min(vals) >= need), note=note))
+    return rows
+
+
+def h3_rows(trials: pd.DataFrame, summary: pd.DataFrame, params: Params) -> list[dict]:
+    """가설 3(D-57): 마지막으로 걸은 단계의 Fr ≤ 0.5 ≤ 처음 뛴 단계의 Fr. 영상 판정이 기준."""
+    lim = params["stats.froude_walk_run"]
+    crit = f"Fr(last walk) <= {lim} <= Fr(first run)"
+    rows = []
+    for p in sorted(summary["runner"].unique()):
+        s = _stages(summary, p)
+        gaits = {r: [str(x).strip().lower() for x in d["gait_video"]]
+                 for r, d in trials[trials["runner"] == p].groupby("ratio_pct")}
+        order = list(s["ratio_pct"])
+        run = [r for r in order if any(x in ("run", "mixed") for x in gaits.get(r, []))]
+        if not run:
+            rows.append(_row("H3", p, "Fr at transition", criterion=crit, note="no_run: 가장 높은 단계에서도 걷기(F6)"))
+            continue
+        first = run[0]
+        below = [r for r in order[:order.index(first)] if gaits.get(r) and all(x == "walk" for x in gaits[r])]
+        notes = []
+        above = [r for r in order[order.index(first) + 1:] if gaits.get(r) and all(x == "walk" for x in gaits[r])]
+        if above:
+            notes.append(f"non_monotonic: {', '.join(above)}%에서 다시 두 시행 모두 걷기")
+        fr = s.set_index("ratio_pct")["fr"]
+        if not below:
+            rows.append(_row("H3", p, "Fr at transition", criterion=crit,
+                             note="; ".join([f"처음 뛴 단계 {first}%보다 낮은 걷기 단계가 없다"] + notes)))
+            continue
+        last = below[-1]
+        f_walk, f_run = float(fr[last]), float(fr[first])
+        if not (np.isfinite(f_walk) and np.isfinite(f_run)):
+            rows.append(_row("H3", p, "Fr at transition", criterion=crit,
+                             note="; ".join(["다리 길이나 속도(t30)가 없어 Fr를 못 낸다"] + notes)))
+            continue
+        notes.insert(0, f"마지막 걷기 {last}% Fr {f_walk:.3f}, 처음 뜀 {first}% Fr {f_run:.3f}")
+        rows.append(_row("H3", p, "Fr at transition", f_run, n=2, criterion=crit,
+                         supported=bool(f_walk <= lim <= f_run), note="; ".join(notes)))
+    return rows
+
+
+def prescription_upper(summary: pd.DataFrame, params: Params) -> pd.DataFrame:
+    """처방 범위 상한(SPEC §4.5, D-54): T 순서로 처음 평균 동조가 깨진 단계 바로 앞 단계의 T.
+
+    T_high_s3는 처음 S3 < `exp2.h1_2_min_sync_frac`가 된 단계 바로 앞. 100% 단계부터 깨지면 NaN(없음).
+    끝까지 깨지지 않으면 가장 높은 단계의 T와 flags=not_broken.
+    """
+    tol = params["sync.tol_pct"] / 100
+    need = params["exp2.h1_2_min_sync_frac"] * 100
+    cprim = "cadence_median_spm" if params["cadence.primary"] == "median" else "cadence_rate_spm"
+    out = []
+    for p in sorted(summary["runner"].unique()):
+        s = summary[(summary["runner"] == p) & (summary["ratio_pct"].map(_ratio_key) > 0)]
+        s = s.sort_values("tempo_ratio_pct")
+        t = s["tempo_ratio_pct"].astype(float).to_numpy()
+        synced = (np.abs(s[cprim].astype(float) / s["bpm_played"].astype(float) - 1) <= tol).to_numpy()
+        s3ok = (s["sync3_pct"].astype(float) >= need).to_numpy()
+        row, flags = dict(runner=p), []
+        for name, ok in (("t_high_pct", synced), ("t_high_s3_pct", s3ok)):
+            broken = np.where(~ok)[0]
+            if not len(t):
+                row[name] = NAN
+            elif not len(broken):
+                row[name] = float(t[-1])
+                flags.append(f"{name}_not_broken")
+            else:
+                row[name] = float(t[broken[0] - 1]) if broken[0] > 0 else NAN
+        row["flags"] = ";".join(flags)
+        out.append(row)
+    return pd.DataFrame(out)

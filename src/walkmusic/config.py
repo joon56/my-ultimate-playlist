@@ -49,6 +49,16 @@ class Params:
         """'섹션.키' 전체 목록."""
         return [f"{s}.{k}" for s, sec in self._data.items() for k in sec]
 
+    def with_overrides(self, overrides: Mapping[str, Any]) -> Params:
+        """'섹션.키' → 값을 바꾼 사본(원본은 그대로). 있는 키만 바꿀 수 있다(예: 실험 2의 걸음 간격 하한, D-56)."""
+        data = {s: dict(sec) for s, sec in self._data.items()}
+        for dotted, value in overrides.items():
+            section, _, key = dotted.partition(".")
+            if section not in data or key not in data[section]:
+                raise KeyError(f"params.toml에 '{dotted}'가 없다")
+            data[section][key] = value
+        return Params(data, self.path)
+
 
 def load_params(path: str | Path | None = None) -> Params:
     """params.toml을 읽어 :class:`Params`로 돌려준다. path가 없으면 저장소의 config/params.toml."""

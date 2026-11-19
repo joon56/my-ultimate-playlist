@@ -44,6 +44,7 @@
 - `python -m walkmusic inspect <zip>` — 파일 구조와 시간·샘플링 요약(좌표 출력 없음)
 - `python -m walkmusic qa <zip>` · `qa --all` · `qa --gate G1 [--synthetic]` · `qa --links` — 품질 검사 Q01–Q17(Q16·Q17은 아직 구현 전), 관문 표. `--links`는 `data/raw/<사람>/`의 zip을 기록지 시각과 맞춘 연결 제안만 낸다(`results/zip_links.csv`, D-27)
 - `python -m walkmusic process` · `stats` · `all [--synthetic]` — 실험 1의 곡 구간·회차·사람 표, 가설 판정·처방 하한·시나리오 신호. 실제 데이터는 분석 고정 태그가 있어야 돈다(D-35, `--allow-unfrozen`은 기록을 남기고 예외로). 그림(`figures`)과 데이터 동결(`freeze`)은 아직 없다
+- `python -m walkmusic exp23 [--synthetic]` · `exp23 --links [--date YYYY-MM-DD]` — 실험 2·3 표(exp2_stages·exp2_summary·jumps·exp3_swings 등), 가설 1-2·3·4 판정, 현장 당일 점검 표. `--links`는 기록 순서로 zip 연결 제안만(D-55, D-73)
 
 ## 지금 상태
 
