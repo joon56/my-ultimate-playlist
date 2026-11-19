@@ -1,6 +1,7 @@
 """지표 계산 순수 함수 (SPEC §4, §9). 파일을 읽거나 쓰지 않는다.
 
-실험 2·3 식(Fr, 체공, 진자, 음원 반올림)은 DECISIONS D-53에 따라 Phase 1에서는 함수만 둔다.
+실험 2·3 식(Fr, 체공, 진자, 점프, 달리기 스프링, 분절 진자, 무릎 각, 역진자 보폭, Bland–Altman)은 여기 순수 함수로 두고
+exp2·exp3·jumps가 쓴다(D-53). 숫자 예는 SPEC §9 #1–31, 손계산 노트 HANDCALC 1–11과 같다.
 """
 
 from __future__ import annotations
@@ -149,3 +150,127 @@ def flight_events(accel_mag_g: Sequence[float], fs_hz: float, a_thresh_g: float,
         else:
             i += 1
     return events
+
+
+# --- 실험 2·3 손계산 식 (SPEC §4.4, §4.6, §5.10, §9 #21–30, HANDCALC 4–11) ---
+
+
+def jump_from_flight(flight_time_s: float, mass_kg: float, g: float) -> dict[str, float]:
+    """체공 시간으로 본 수직 점프 (SPEC §4.6). 이륙·착지 때 몸 중심 높이가 같다고 본다.
+
+    height_m = g t_f² ÷ 8, takeoff_v_ms = g t_f ÷ 2, impulse_ns = m v (N·s), kinetic_energy_j = ½ m v² (J).
+    """
+    v = g * flight_time_s / 2.0
+    return dict(height_m=rise_height_m(flight_time_s, g), takeoff_v_ms=v, impulse_ns=mass_kg * v,
+                kinetic_energy_j=0.5 * mass_kg * v**2)
+
+
+def pushoff_mean_grf_bw(takeoff_v_ms: float, pushoff_time_s: float, g: float) -> float:
+    """밀기 구간 평균 지면반력 (체중 배수) = 1 + v ÷ (g t_push) (SPEC §4.6)."""
+    return 1.0 + takeoff_v_ms / (g * pushoff_time_s)
+
+
+def frames_to_seconds(frames: float, fps: float) -> float:
+    """영상 프레임 수 → 시간 (s)."""
+    return frames / fps
+
+
+def height_per_frame_m(flight_time_s: float, fps: float, g: float) -> float:
+    """체공 1프레임 차이가 만드는 높이 차이 (m), 1차 근사 dh = (g t_f ÷ 4) ÷ fps (SPEC §9 #23)."""
+    return g * flight_time_s / 4.0 / fps
+
+
+def running_flight(speed_ms: float, flight_time_s: float, g: float) -> dict[str, float]:
+    """달리기 한 걸음의 체공을 포물선으로 본다 (SPEC §4.6). v_y = g t_f ÷ 2, θ = arctan(v_y ÷ v)."""
+    vy = g * flight_time_s / 2.0
+    return dict(vertical_v_ms=vy, takeoff_angle_deg=math.degrees(math.atan2(vy, speed_ms)),
+                air_distance_m=speed_ms * flight_time_s, rise_height_m=rise_height_m(flight_time_s, g))
+
+
+def spring_mass(mass_kg: float, contact_time_s: float, flight_time_s: float, speed_ms: float,
+                leg_length_m: float, g: float) -> dict[str, float]:
+    """달리기 스프링(Morin et al., 2005; SPEC §4.6). 접촉 중 지면반력을 반 사인파로 본다.
+
+    F_max = m g (π ÷ 2)(t_f ÷ t_c + 1), Δy = F_max t_c² ÷ (m π²) − g t_c² ÷ 8,
+    ΔL = L − √(L² − (v t_c ÷ 2)²) + Δy, k_vert = F_max ÷ Δy, k_leg = F_max ÷ ΔL (kN/m로 낸다),
+    탄성에너지 = ½ k_vert Δy² (J), 접촉 중 평균 지면반력 = (t_c + t_f) ÷ t_c (BW).
+    """
+    tc, tf = contact_time_s, flight_time_s
+    fmax = mass_kg * g * (math.pi / 2.0) * (tf / tc + 1.0)
+    dy = fmax * tc**2 / (mass_kg * math.pi**2) - g * tc**2 / 8.0
+    dl = leg_length_m - math.sqrt(leg_length_m**2 - (speed_ms * tc / 2.0) ** 2) + dy
+    kvert = fmax / dy
+    return dict(fmax_n=fmax, fmax_bw=fmax / (mass_kg * g), delta_y_m=dy, delta_l_m=dl, kvert_kn_m=kvert / 1000.0,
+                kleg_kn_m=fmax / dl / 1000.0, elastic_energy_j=0.5 * kvert * dy**2,
+                mean_grf_contact_bw=(tc + tf) / tc)
+
+
+def segment_pendulum(mass_kg: float, thigh_m: float, shank_m: float, knee_flexion_deg: float, g: float,
+                     fractions: dict[str, float]) -> dict[str, float]:
+    """허벅지 + 정강이·발 두 분절 물리 진자 (SPEC §4.4, D-41).
+
+    fractions: thigh_mass, thigh_com, thigh_kcm, shank_mass, shank_com, shank_kcm (`pendulum.seg_*_frac`).
+    엉덩관절 원점, 허벅지가 x축. 정강이·발 질량중심 = (l_t + c_s l_s cos φ, c_s l_s sin φ).
+    돌려주는 값: mass_kg(두 분절 합), inertia_hip_kgm2(평행축 정리), com_dist_m(엉덩관절 → 전체 질량중심),
+    period_s = 2π √(I ÷ (m g d)).
+    """
+    phi = math.radians(knee_flexion_deg)
+    m_t, m_s = fractions["thigh_mass"] * mass_kg, fractions["shank_mass"] * mass_kg
+    r_t = fractions["thigh_com"] * thigh_m
+    c_s = fractions["shank_com"] * shank_m
+    x_s, y_s = thigh_m + c_s * math.cos(phi), c_s * math.sin(phi)
+    inertia = (m_t * ((fractions["thigh_kcm"] * thigh_m) ** 2 + r_t**2)
+               + m_s * ((fractions["shank_kcm"] * shank_m) ** 2 + x_s**2 + y_s**2))
+    m_sum = m_t + m_s
+    d = math.hypot((m_t * r_t + m_s * x_s) / m_sum, m_s * y_s / m_sum)
+    return dict(mass_kg=m_sum, inertia_hip_kgm2=inertia, com_dist_m=d,
+                period_s=2.0 * math.pi * math.sqrt(inertia / (m_sum * g * d)))
+
+
+def pendulum_energy(mass_kg: float, com_dist_m: float, inertia_kgm2: float, amplitude_deg: float,
+                    g: float) -> dict[str, float]:
+    """진자 에너지와 토크 (SPEC §4.4, HANDCALC 8·9). 꼭대기 위치에너지 m g d (1 − cos θ) = 바닥 ½ I ω².
+
+    돌려주는 값: potential_energy_j, omega_pred_rad_s = √(2 m g d (1 − cos θ) ÷ I),
+    gravity_torque_nm = m g d sin θ, angular_accel_rad_s2 = τ ÷ I.
+    """
+    th = math.radians(amplitude_deg)
+    pe = mass_kg * g * com_dist_m * (1.0 - math.cos(th))
+    tau = mass_kg * g * com_dist_m * math.sin(th)
+    return dict(potential_energy_j=pe, omega_pred_rad_s=math.sqrt(2.0 * pe / inertia_kgm2),
+                gravity_torque_nm=tau, angular_accel_rad_s2=tau / inertia_kgm2)
+
+
+def knee_angles(hip_xy: Sequence[float], knee_xy: Sequence[float], ankle_xy: Sequence[float]) -> dict[str, float]:
+    """영상 마커(대전자·무릎·바깥 복사뼈 픽셀 좌표)의 무릎 각 (SPEC §5.7, 코사인 법칙).
+
+    knee_inner_deg = 무릎 안쪽 각, knee_flexion_deg = 180 − 안쪽 각,
+    leg_angle_deg = arctan(Δx ÷ Δy) (대전자 → 복사뼈 선과 수직선 사이).
+    """
+    hip, knee, ankle = (np.asarray(p, dtype=float) for p in (hip_xy, knee_xy, ankle_xy))
+    a, b, c = np.linalg.norm(knee - hip), np.linalg.norm(ankle - knee), np.linalg.norm(ankle - hip)
+    inner = math.degrees(math.acos(float(np.clip((a**2 + b**2 - c**2) / (2 * a * b), -1.0, 1.0))))
+    dx, dy = ankle - hip
+    return dict(knee_inner_deg=inner, knee_flexion_deg=180.0 - inner, leg_angle_deg=math.degrees(math.atan2(dx, dy)))
+
+
+def step_length_zh(leg_length_m: float, com_vertical_m: float, correction: float) -> float:
+    """역진자 보폭 SL_ZH = K · 2√(2 l h − h²) (m) (Zijlstra & Hof 2003, D-40). K = `com.zh_correction`."""
+    h = com_vertical_m
+    return correction * 2.0 * math.sqrt(2.0 * leg_length_m * h - h**2)
+
+
+def bland_altman(method_a: Sequence[float], method_b: Sequence[float], ddof: int) -> dict[str, float]:
+    """짝지은 두 방법의 Bland–Altman (SPEC §5.10). 차이 = A − B. 일치 한계 = bias ± 1.96 SD(ddof)."""
+    a, b = np.asarray(method_a, dtype=float), np.asarray(method_b, dtype=float)
+    ok = np.isfinite(a) & np.isfinite(b)
+    a, b = a[ok], b[ok]
+    n = len(a)
+    if n == 0:
+        nan = float("nan")
+        return dict(n=0, mean_a=nan, mean_b=nan, bias=nan, sd=nan, loa_low=nan, loa_high=nan, mean_abs_diff=nan)
+    d = a - b
+    bias = float(d.mean())
+    sd = float(d.std(ddof=ddof)) if n > ddof else float("nan")
+    return dict(n=n, mean_a=float(a.mean()), mean_b=float(b.mean()), bias=bias, sd=sd, loa_low=bias - 1.96 * sd,
+                loa_high=bias + 1.96 * sd, mean_abs_diff=float(np.abs(d).mean()))
