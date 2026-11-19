@@ -91,7 +91,8 @@ python -m walkmusic qa --gate G1 --synthetic     # try the quality gate on gener
 | `python -m walkmusic qa <zip>` · `qa --all` | Quality checks for one recording or every walk in `data/manifest.csv` |
 | `python -m walkmusic qa --links` | Propose which zip belongs to which logbook row, matched by start time |
 | `python -m walkmusic qa --gate G1 [--synthetic]` | Gate table per person; `--synthetic` runs on generated demo data |
-| *(Phase 2)* `process` · `stats` · `figures` · `freeze` · `all` | Metrics, verdicts, figures, data freeze — one command to rebuild everything |
+| `python -m walkmusic all [--synthetic]` (`process` · `stats`) | Experiment 1 song segments, per-walk and per-person tables, hypothesis verdicts. Real data runs only after the analysis freeze tag |
+| *(next)* `figures` · `freeze` | Figures and the final data freeze |
 
 ## Repository layout
 

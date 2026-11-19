@@ -53,6 +53,9 @@ class SynthSpec:
     epoch_ms: int = 1_800_000_000_000
     seed: int = 0
     extra_files: dict[str, bytes] = field(default_factory=dict)
+    # (기록 시각 t_s, 값): 그 시각부터 케이던스(spm)·이동 속도(m/s)를 바꾼다. 비면 cadence_spm·speed_mps 고정
+    cadence_schedule: tuple[tuple[float, float], ...] = ()
+    speed_schedule: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass
@@ -74,8 +77,30 @@ def _step_times(rng: np.random.Generator, t0: float, n: int, cadence: float, cv_
     return t0 + np.concatenate([[0.0], np.cumsum(iv[:-1])])
 
 
-def _body_force(t: np.ndarray, steps: np.ndarray, amps: np.ndarray, cadence: float) -> np.ndarray:
-    """걷는 동안 몸 기준 비력(g): 위쪽 발 디딤 봉우리 + 앞뒤 흔들림 + 한 보에 한 번 좌우 흔들림."""
+def _scheduled(schedule: tuple[tuple[float, float], ...], t: np.ndarray | float, default: float) -> np.ndarray:
+    """(시각, 값) 계단 함수의 t에서의 값. 첫 시각 전에는 default."""
+    times = np.array([s[0] for s in schedule])
+    vals = np.r_[default, [s[1] for s in schedule]]
+    return vals[np.searchsorted(times, np.asarray(t, float), side="right")]
+
+
+def _scheduled_steps(rng: np.random.Generator, t0: float, t_end: float, spec: SynthSpec) -> np.ndarray:
+    """케이던스 계획대로 t0부터 t_end까지 걸음 시각을 만든다."""
+    steps, t = [t0], t0
+    while True:
+        c = float(_scheduled(spec.cadence_schedule, t, spec.cadence_spm))
+        t += 60.0 / c * (1 + spec.interval_cv_pct / 100.0 * rng.standard_normal())
+        if t > t_end:
+            return np.array(steps)
+        steps.append(t)
+
+
+def _body_force(t: np.ndarray, steps: np.ndarray, amps: np.ndarray, cadence: float,
+                follow_steps: bool = False) -> np.ndarray:
+    """걷는 동안 몸 기준 비력(g): 위쪽 발 디딤 봉우리 + 앞뒤 흔들림 + 한 보에 한 번 좌우 흔들림.
+
+    follow_steps이면 앞뒤·좌우 흔들림의 위상을 걸음 시각에 맞춘다(케이던스가 바뀌는 기록).
+    """
     f_step = cadence / 60.0
     up = np.zeros_like(t)
     for tk, ak in zip(steps, amps, strict=True):
@@ -84,8 +109,9 @@ def _body_force(t: np.ndarray, steps: np.ndarray, amps: np.ndarray, cadence: flo
     active = (t >= steps[0] - 0.3) & (t <= steps[-1] + 0.3)
     if active.any():
         up[active] -= up[active].mean()  # 걷는 동안 평균 1 g를 지킨다
-    ap = 0.15 * np.sin(2 * np.pi * f_step * t) * active
-    ml = 0.10 * np.sin(np.pi * f_step * t) * active
+    phase = np.interp(t, steps, np.arange(len(steps))) if follow_steps else f_step * t
+    ap = 0.15 * np.sin(2 * np.pi * phase) * active
+    ml = 0.10 * np.sin(np.pi * phase) * active
     return np.column_stack([ap, ml, up])
 
 
@@ -99,8 +125,11 @@ def make_files(spec: SynthSpec) -> tuple[dict[str, bytes], SynthTruth]:
     stand0 = (pre[-1] + period if len(pre) else spec.handling_s)
     stand1 = stand0 + spec.stand_start_s
     t_dep = stand1 + 0.3
-    n_walk = spec.n_walk_steps or int(spec.walk_s / period)
-    walk = _step_times(rng, t_dep, n_walk, spec.cadence_spm, spec.interval_cv_pct)
+    if spec.cadence_schedule:
+        walk = _scheduled_steps(rng, t_dep, t_dep + spec.walk_s, spec)
+    else:
+        n_walk = spec.n_walk_steps or int(spec.walk_s / period)
+        walk = _step_times(rng, t_dep, n_walk, spec.cadence_spm, spec.interval_cv_pct)
     end0 = walk[-1] + 0.4
     end1 = end0 + spec.stand_end_s
     duration = end1 + spec.post_handling_s
@@ -112,7 +141,8 @@ def make_files(spec: SynthSpec) -> tuple[dict[str, bytes], SynthTruth]:
 
     all_steps = np.concatenate([pre, walk])
     amps = spec.amp_g * (1 + spec.amp_cv_pct / 100.0 * rng.standard_normal(len(all_steps)))
-    fb = _body_force(t, all_steps, amps, spec.cadence_spm) if len(all_steps) else np.zeros((len(t), 3))
+    fb = _body_force(t, all_steps, amps, spec.cadence_spm, bool(spec.cadence_schedule)) \
+        if len(all_steps) else np.zeros((len(t), 3))
     if len(pre):  # 앞 걷기와 본 걷기 사이 서 있기에는 흔들림을 끈다
         between = (t > pre[-1] + 0.3) & (t < walk[0] - 0.3)
         fb[between, :2] = 0.0
@@ -163,10 +193,11 @@ def make_files(spec: SynthSpec) -> tuple[dict[str, bytes], SynthTruth]:
     # 위치: 1 Hz, 기록 전 점 2개, 걷는 동안 북쪽으로 이동(0 근처 가짜 좌표)
     lt = np.r_[-14.2, -5.2, 0.05 + np.arange(int(duration))]
     moving = (lt >= t_dep) & (lt <= walk[-1])
-    dist = np.cumsum(np.r_[0, np.diff(lt)] * moving * spec.speed_mps)
+    v_now = _scheduled(spec.speed_schedule, lt, spec.speed_mps)
+    dist = np.cumsum(np.r_[0, np.diff(lt) * moving[1:] * v_now[:-1]])
     lat = 0.001 + np.degrees(dist / 6371008.8) + np.degrees(rng.normal(0, 0.15, len(lt)) / 6371008.8)
     lon = 0.001 + np.degrees(rng.normal(0, 0.15, len(lt)) / 6371008.8)
-    speed = np.where(moving, spec.speed_mps + rng.normal(0, 0.05, len(lt)), 0.0)
+    speed = np.where(moving, v_now + rng.normal(0, 0.05, len(lt)), 0.0)
     speed[lt < 2.5] = -1.0
     loc = pd.DataFrame({"time": epoch_ns + np.round(lt * 1e9).astype("int64"), "seconds_elapsed": lt,
                         "altitude": 30.0, "speedAccuracy": np.where(speed < 0, -1.0, 0.9), "bearingAccuracy": 60.0,

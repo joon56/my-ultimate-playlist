@@ -1,6 +1,6 @@
-"""명령줄: ``python -m walkmusic inspect|qa``.
+"""명령줄: ``python -m walkmusic inspect|qa|process|stats|all``.
 
-Phase 1 명령만 있다(process, stats, figures, freeze, all은 Phase 2 이후).
+process·stats·all은 실험 1이다. 실제 데이터는 분석 고정 태그가 있어야 돈다(D-35). figures·freeze는 아직 없다.
 좌표 값과 기기 이름은 어떤 출력에도 쓰지 않는다.
 """
 
@@ -26,7 +26,43 @@ def _build_parser() -> argparse.ArgumentParser:
     p_qa.add_argument("--synthetic", action="store_true", help="합성 데이터로(results_synthetic/에만 쓴다)")
     p_qa.add_argument("--links", action="store_true",
                       help="data/raw/<사람>/의 zip을 기록지 시각과 맞춘 연결 제안(results/zip_links.csv)만 낸다")
+
+    for name, text in (("process", "실험 1: 곡 구간·회차·사람 표(segments·walks·participants.csv)"),
+                       ("stats", "실험 1: 가설 판정·처방 범위·시나리오 신호(hypotheses·prescription·g2_flags.csv)"),
+                       ("all", "process 다음 stats")):
+        sp = sub.add_parser(name, help=text)
+        sp.add_argument("--synthetic", action="store_true", help="합성 자료로(results_synthetic/exp1/에만 쓴다)")
+        sp.add_argument("--allow-unfrozen", action="store_true",
+                        help="분석 고정 태그 없이 실제 데이터로 돌린다(run_info.json에 unfrozen=true, D-35)")
     return ap
+
+
+def _run_exp1(command: str, synthetic: bool, allow_unfrozen: bool) -> int:
+    from walkmusic.config import ROOT, load_params
+    from walkmusic.exp1 import make_synthetic_dataset, synthetic_paths
+    from walkmusic.qa import Paths
+    from walkmusic.stats import FreezeError, run_pipeline
+
+    params = load_params()
+    if synthetic:
+        root = ROOT / "results_synthetic" / "exp1"
+        paths = synthetic_paths(root)
+        if not paths.manifest.exists():
+            print("합성 실험 1 자료를 만든다(처음 한 번, 1–2분)")
+            make_synthetic_dataset(root, params)
+    else:
+        paths = Paths.real()
+    try:
+        summary = run_pipeline(paths, params, real=not synthetic, allow_unfrozen=allow_unfrozen,
+                               do_process=command in ("process", "all"), do_stats=command in ("stats", "all"))
+    except FreezeError as e:
+        print(e)
+        return 3
+    print(f"결과 → {paths.results}")
+    for r in summary.get("hypotheses", []):
+        if r["participant"] == "ALL":
+            print(f"{r['hypothesis']}: 집단 {r['supported']} ({r['note']})")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -47,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
 
         return run_cli(zip_path=args.zip, walk=args.walk, all_walks=args.all, gate=args.gate,
                        synthetic=args.synthetic, links=args.links)
+    if args.command in ("process", "stats", "all"):
+        return _run_exp1(args.command, args.synthetic, args.allow_unfrozen)
     return 2  # pragma: no cover
 
 

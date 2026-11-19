@@ -91,7 +91,8 @@ python -m walkmusic qa --gate G1 --synthetic     # 합성 데모 회차로 품�
 | `python -m walkmusic qa <zip>` · `qa --all` | 기록 하나 또는 `data/manifest.csv`의 모든 회차를 품질 검사한다 |
 | `python -m walkmusic qa --links` | 기록 시작 시각으로 zip과 기록지 줄을 맞춘 연결 제안을 낸다 |
 | `python -m walkmusic qa --gate G1 [--synthetic]` | 사람별 관문 표. `--synthetic`은 합성 데모 자료로 돌린다 |
-| *(Phase 2)* `process` · `stats` · `figures` · `freeze` · `all` | 지표, 판정, 그림, 데이터 동결. 명령 한 줄로 전부 다시 만든다 |
+| `python -m walkmusic all [--synthetic]` (`process` · `stats`) | 실험 1 곡 구간·회차·사람 표와 가설 판정. 실제 데이터는 분석 고정 태그가 있어야 돈다 |
+| *(다음)* `figures` · `freeze` | 그림과 최종 데이터 동결 |
 
 ## 폴더
 

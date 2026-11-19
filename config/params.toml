@@ -81,6 +81,9 @@ tempo_file_range_bpm = [100, 245]    # [확정 11/9] 챌린지 음원 범위(5 B
 doppler_max_speed_accuracy_ms = 0.5  # [초안] 속도 정확도가 이보다 나쁜 위치 샘플은 뺀다
 section_radius_m = 20.0              # [초안] 측정 구간 시작·끝 통과 판정 반경
 mismatch_tol_pct = 5.0               # [초안] Doppler 중앙값과 구간 통과 속도 차이가 이보다 크면 speed_mismatch
+gps_path_every_n = 1                 # [초안 D-01] 곡 구간 GPS 경로 거리를 낼 때 위치 점을 몇 개마다 이을지(1 = 모두)
+min_path_span_s = 30.0               # [초안 D-01] 구간 안 첫·마지막 위치 점 사이가 이보다 짧으면 속도를 내지 않는다
+min_location_rate_hz = 0.5           # [초안 D-67] 유효 창 안 위치 점이 초당 이보다 적으면 gps_sparse(속도·보폭은 참고값)
 
 [flight]
 a_thresh_g = 0.2                     # [확정] 가속도 크기 0.2 g 미만
