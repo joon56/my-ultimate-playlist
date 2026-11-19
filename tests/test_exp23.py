@@ -99,3 +99,86 @@ def test_link_proposal_by_recording_order(tmp_path, params):
     assert set(links["status"]) == {"ok"}
     kinds = dict(zip(links["trial_id"], links["detected_kind"], strict=True))
     assert kinds["E2_A_J_1"] == "jump" and kinds["E3_B_K_2"] == "swing" and kinds["E2_C_150_1"] == "trial"
+
+
+@pytest.fixture(scope="module")
+def messy(tmp_path_factory, params):
+    """현장 기록지가 덜 채워졌거나 틀린 경우(독립 검토 #1·#2·#3·#5와 작은 문제들)."""
+    import numpy as np
+
+    root = tmp_path_factory.mktemp("messy")
+    make_synthetic_exp23(root, params)
+    paths = Paths23.under(root)
+    s2 = pd.read_csv(paths.data / "exp2_trials.csv", dtype=str, keep_default_na=False)
+
+    def setv(tid, col, val):
+        s2.loc[s2["trial_id"] == tid, col] = val
+
+    setv("E2_A_150_1", "zip_file", "")  # 뛴 시행의 zip이 없다 → 영상 값(t30, N, 판정)은 남아야 한다
+    setv("E2_B_S_1", "zip_file", "")  # 무음 zip이 없다 → 현장 PC는 기록지 값으로 낸다
+    kor = {"walk": "걷기", "run": "뛰기", "mixed": "섞임"}
+    c = s2["runner"] == "C"
+    s2.loc[c, "gait_video"] = s2.loc[c, "gait_video"].map(lambda g: kor.get(g, g))  # C는 한글로 적었다
+    setv("E2_A_165_2", "zip_file", "E2_A_165_1.zip")  # 같은 zip을 두 줄에
+    setv("E2_C_100_2", "t30_s", "0")  # 0으로 잘못 적었다
+    s2["valid"] = ""  # 선택 열: 0이면 뺀다
+    setv("E2_B_120_2", "valid", "0")
+    s2.to_csv(paths.data / "exp2_trials.csv", index=False)
+    (paths.raw / "C" / "E2_C_100_2.zip").write_bytes(b"not a zip")  # 깨진 zip
+    seg = pd.read_csv(paths.results / "segments.csv")
+    seg.loc[0, "cv_pct"] = np.nan  # 실험 1 결과의 빈칸(걸음이 모자란 곡 구간)
+    seg.to_csv(paths.results / "segments.csv", index=False)
+    return run_exp23(paths, params, real=False), paths
+
+
+def test_messy_sheet_does_not_stop_the_run(messy):
+    out, _ = messy
+    assert len(out["trials"]) == 36  # 기록지 줄은 모두 남는다
+    fails = {(q["walk_id"], q["check_id"]) for q in out["qa"] if q["status"] == "FAIL"}
+    assert ("E2_C_100_2", "Q01") in fails  # 깨진 zip
+    assert ("E2_A_165_2", "Q01") in fails and ("E2_A_165_1", "Q01") in fails  # 같은 zip
+    h2 = {r["participant"] for r in out["hypotheses"] if r["hypothesis"] == "H2_variability"}
+    assert h2 - {"ALL"} == {"A", "B", "C"}  # 실험 1 표의 빈칸 때문에 멈추지 않는다
+
+
+def test_messy_sheet_values_kept_without_zip(messy):
+    out, _ = messy
+    tr = out["trials"].set_index("trial_id")
+    assert tr.loc["E2_A_150_1", "gait_video"] == "run" and "no_zip" in tr.loc["E2_A_150_1", "flags"]
+    assert tr.loc["E2_A_150_1", "v_ms"] > 0
+    h3 = {r["participant"]: r["supported"] for r in out["hypotheses"] if r["hypothesis"] == "H3"}
+    assert h3["A"] is True and h3["C"] is True  # A: zip 없는 뛴 시행, C: 한글 판정
+    pcs = out["pcs"].set_index("runner")
+    assert pcs.loc["B", "n_silent"] == 2 and pcs.loc["B", "pc_field_spm"] == pytest.approx(105, abs=1.0)
+
+
+def test_messy_invalid_trial_excluded_from_stage(messy):
+    out, _ = messy
+    s = out["summary"]
+    assert int(s[(s["runner"] == "B") & (s["ratio_pct"] == "120")]["n_trials"].iloc[0]) == 1
+    assert "invalid_sheet" in out["trials"].set_index("trial_id").loc["E2_B_120_2", "flags"]
+
+
+def test_fill_prescription_rerun_replaces_flags(messy):
+    from walkmusic.exp23 import fill_prescription
+
+    _, paths = messy
+    pres = pd.read_csv(paths.results / "prescription.csv")
+    pres["flags"] = ""  # 모든 칸이 빈 flags로 저장된 경우(다시 읽으면 숫자 열이 된다)
+    pres.to_csv(paths.results / "prescription.csv", index=False)
+    first = pd.DataFrame([dict(runner="A", t_high_pct=120.0, t_high_s3_pct=120.0,
+                               flags="t_high_pct_not_broken;t_high_s3_pct_not_broken")])
+    second = pd.DataFrame([dict(runner="A", t_high_pct=150.0, t_high_s3_pct=135.0, flags="")])
+    fill_prescription(paths, first)
+    fill_prescription(paths, second)
+    a = pd.read_csv(paths.results / "prescription.csv").query("participant == 'A' and row_type == 'summary'").iloc[0]
+    assert a["t_high_pct"] == 150.0
+    assert "not_broken" not in str(a["flags"])
+
+
+def test_jump_person_medians(res):
+    out, paths, _ = res
+    js = pd.read_csv(paths.results / "jumps_summary.csv").set_index("runner")
+    assert set(js.index) == {"A", "B", "C"}
+    a = out["jumps"][out["jumps"]["runner"] == "A"]
+    assert js.loc["A", "flight_time_s"] == pytest.approx(a["flight_time_s"].median())  # SPEC §5.7: 3회 중앙값

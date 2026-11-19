@@ -29,9 +29,24 @@ from walkmusic.stats import _row
 from walkmusic.steps import detect_steps
 
 NAN = float("nan")
-MEAN_COLS = ("bpm_played", "tempo_ratio_pct", "v_ms", "cadence_record_spm", "cadence_median_spm", "cadence_rate_spm",
-             "sync3_pct", "sync5_pct", "sync3_half_pct", "sync3_double_pct", "cv_pct", "impact_g", "flight_step_frac",
-             "flight_time_median_s", "rise_height_m", "contact_time_s", "dC_pct")
+MEAN_COLS = ("bpm_played", "pc_field_spm", "tempo_ratio_pct", "v_ms", "cadence_record_spm", "cadence_median_spm",
+             "cadence_rate_spm", "sync3_pct", "sync5_pct", "sync3_half_pct", "sync3_double_pct", "cv_pct", "impact_g",
+             "flight_step_frac", "flight_time_median_s", "rise_height_m", "contact_time_s", "dC_pct")
+SPRING_COLS = ("fmax_bw", "delta_y_m", "delta_l_m", "kvert_kn_m", "kleg_kn_m", "elastic_energy_j",
+               "mean_grf_contact_bw")
+GAIT_WORDS = {"walk": ("walk", "w", "걷기", "걸음", "걷"), "run": ("run", "r", "뛰기", "달리기", "뜀", "뛰"),
+              "mixed": ("mixed", "m", "mix", "섞임", "혼합")}
+
+
+def normalize_gait(label) -> str:
+    """영상 판정 표기 → walk·run·mixed. 비었으면 '', 알 수 없는 말이면 unknown(기록지는 한글로도 적는다)."""
+    s = str(label).strip().lower()
+    if s in ("", "nan", "none"):
+        return ""
+    for name, words in GAIT_WORDS.items():
+        if s in words:
+            return name
+    return "unknown"
 
 
 def exp2_params(params: Params) -> Params:
@@ -52,16 +67,22 @@ def _flight_intervals(tg: np.ndarray, mag: np.ndarray, fs: float, params: Params
             for i, j in flight_events(mag, fs, thr, params["flight.min_duration_s"])]
 
 
+def empty_trial_result() -> dict:
+    """센서 값이 없는 시행(zip 없음·못 읽음)의 같은 열 틀."""
+    return dict(n_steps_window=0, window_t0_s=NAN, window_t1_s=NAN, window_method="", cadence_median_spm=NAN,
+                cadence_rate_spm=NAN, n_valid_intervals=0, sync3_pct=NAN, sync5_pct=NAN, sync3_half_pct=NAN,
+                sync3_double_pct=NAN, cv_pct=NAN, impact_g=NAN, flight_step_frac=NAN, flight_time_median_s=NAN,
+                contact_time_s=NAN, rise_height_m=NAN, sensor_gait="", n_sync_jumps=0, sync_jump_sensor_s="",
+                n_bouts=0, flags=[], _tf=np.array([]), _tc=np.array([]))
+
+
 def analyze_trial(t: np.ndarray, total_g: np.ndarray, gravity: np.ndarray, params: Params, bpm: float = NAN,
                   t_in: float = NAN, t_out: float = NAN) -> dict:
     """실험 2 시행 하나의 센서 값. total_g는 총 가속도(g, N×3). bpm은 실제로 틀어 준 BPM(무음이면 NaN)."""
     p2 = exp2_params(params)
     st = detect_steps(t, total_g, gravity, p2)
-    out: dict = dict(n_steps_window=0, window_t0_s=NAN, window_t1_s=NAN, window_method="", cadence_median_spm=NAN,
-                     cadence_rate_spm=NAN, n_valid_intervals=0, sync3_pct=NAN, sync5_pct=NAN, sync3_half_pct=NAN,
-                     sync3_double_pct=NAN, cv_pct=NAN, impact_g=NAN, flight_step_frac=NAN,
-                     flight_time_median_s=NAN, contact_time_s=NAN, rise_height_m=NAN, sensor_gait="",
-                     n_sync_jumps=0, sync_jumps_sensor_s="", n_bouts=len(st.bouts), flags=[])
+    out = empty_trial_result()
+    out["n_bouts"] = len(st.bouts)
     tg, x, fs = _uniform(np.asarray(t, float), np.column_stack([total_g, gravity]))
     mag = np.linalg.norm(x[:, :3], axis=1)
     flights = _flight_intervals(tg, mag, fs, params)
@@ -72,7 +93,7 @@ def analyze_trial(t: np.ndarray, total_g: np.ndarray, gravity: np.ndarray, param
         out["flags"].append("multiple_bouts")
     b0, b1, _ = max(st.bouts, key=lambda b: b[2])
     sync = [f for f in flights if f[1] < b0][-params["exp2.n_sync_jumps"]:]
-    out.update(n_sync_jumps=len(sync), sync_jumps_sensor_s=";".join(f"{f[1]:.3f}" for f in sync))
+    out.update(n_sync_jumps=len(sync), sync_jump_sensor_s=";".join(f"{f[1]:.3f}" for f in sync))
     if len(sync) != params["exp2.n_sync_jumps"]:
         out["flags"].append(f"sync_jumps_{len(sync)}")
 
@@ -135,7 +156,8 @@ def _ratio_key(r: str) -> float:
 
 
 def _gait(values: pd.Series) -> str:
-    v = {str(x).strip().lower() for x in values if str(x).strip()}
+    """단계 걸음새: 시행 판정이 모두 walk면 walk, 모두 run이면 run, 섞이면 mixed. 빈칸·unknown은 빼고 본다."""
+    v = {normalize_gait(x) for x in values} - {"", "unknown"}
     if not v:
         return ""
     return "walk" if v == {"walk"} else "run" if v == {"run"} else "mixed"
@@ -170,11 +192,14 @@ def stage_summary(trials: pd.DataFrame, legs: dict[str, float], params: Params, 
                                else "meaningful_up" if dc > 0 else "meaningful_down")
         flags = sorted({f for x in d.get("flags", pd.Series(dtype=str)).fillna("") for f in str(x).split(";") if f})
         mass = (body or {}).get(runner, {}).get("mass_kg", NAN)
+        ids = [i for i in d.get("trial_id", []) if phases and i in phases]
+        tf_all = np.concatenate([phases[i][0] for i in ids] or [[]])
+        tc_all = np.concatenate([phases[i][1] for i in ids] or [[]])
+        if len(tf_all):  # 단계 값은 두 시행의 걸음을 모은 중앙값(SPEC §4.6)
+            row.update(flight_time_median_s=float(np.median(tf_all)), contact_time_s=float(np.median(tc_all)),
+                       rise_height_m=g * float(np.median(tf_all)) ** 2 / 8)
+        tfm, tcm = row.get("flight_time_median_s", NAN), row.get("contact_time_s", NAN)
         if row["gait_video"] in ("run", "mixed") and np.isfinite(mass) and np.isfinite(leg) and np.isfinite(v):
-            tf_all = np.concatenate([phases[i][0] for i in d.get("trial_id", []) if phases and i in phases] or [[]])
-            tc_all = np.concatenate([phases[i][1] for i in d.get("trial_id", []) if phases and i in phases] or [[]])
-            tfm = float(np.median(tf_all)) if len(tf_all) else row.get("flight_time_median_s", NAN)
-            tcm = float(np.median(tc_all)) if len(tc_all) else row.get("contact_time_s", NAN)
             if np.isfinite(tfm) and np.isfinite(tcm):
                 row.update({k: val for k, val in spring_mass(mass, tcm, tfm, v, leg, g).items()
                             if k in ("fmax_bw", "delta_y_m", "delta_l_m", "kvert_kn_m", "kleg_kn_m",
@@ -185,6 +210,9 @@ def stage_summary(trials: pd.DataFrame, legs: dict[str, float], params: Params, 
         row["flags"] = ";".join(flags)
         rows.append(row)
     out = pd.DataFrame(rows)
+    for col in (*SPRING_COLS, "takeoff_angle_deg"):  # 달린 단계가 없어도 열은 있다(SPEC §7)
+        if col not in out:
+            out[col] = NAN
     if len(out):
         out = out.assign(_k=out["ratio_pct"].map(_ratio_key)).sort_values(["runner", "_k"]).drop(columns="_k")
     return out.reset_index(drop=True)
@@ -221,16 +249,22 @@ def h3_rows(trials: pd.DataFrame, summary: pd.DataFrame, params: Params) -> list
     rows = []
     for p in sorted(summary["runner"].unique()):
         s = _stages(summary, p)
-        gaits = {r: [str(x).strip().lower() for x in d["gait_video"]]
+        gaits = {str(r): [normalize_gait(x) for x in d["gait_video"]]
                  for r, d in trials[trials["runner"] == p].groupby("ratio_pct")}
         order = list(s["ratio_pct"])
+        if not any(x in ("walk", "run", "mixed") for r in order for x in gaits.get(r, [])):
+            rows.append(_row("H3", p, "Fr at transition", criterion=crit,
+                             note="영상 판정(gait_video)이 비어 판정 못 함"))
+            continue
+        unclear = [r for r in order if any(x in ("", "unknown") for x in gaits.get(r, [""]))]
+        notes = [f"영상 판정이 비었거나 알 수 없는 단계: {', '.join(unclear)}%"] if unclear else []
         run = [r for r in order if any(x in ("run", "mixed") for x in gaits.get(r, []))]
         if not run:
-            rows.append(_row("H3", p, "Fr at transition", criterion=crit, note="no_run: 가장 높은 단계에서도 걷기(F6)"))
+            rows.append(_row("H3", p, "Fr at transition", criterion=crit,
+                             note="; ".join(["no_run: 가장 높은 단계에서도 걷기(F6)"] + notes)))
             continue
         first = run[0]
         below = [r for r in order[:order.index(first)] if gaits.get(r) and all(x == "walk" for x in gaits[r])]
-        notes = []
         above = [r for r in order[order.index(first) + 1:] if gaits.get(r) and all(x == "walk" for x in gaits[r])]
         if above:
             notes.append(f"non_monotonic: {', '.join(above)}%에서 다시 두 시행 모두 걷기")
@@ -265,18 +299,26 @@ def prescription_upper(summary: pd.DataFrame, params: Params) -> pd.DataFrame:
         s = summary[(summary["runner"] == p) & (summary["ratio_pct"].map(_ratio_key) > 0)]
         s = s.sort_values("tempo_ratio_pct")
         t = s["tempo_ratio_pct"].astype(float).to_numpy()
-        synced = (np.abs(s[cprim].astype(float) / s["bpm_played"].astype(float) - 1) <= tol).to_numpy()
-        s3ok = (s["sync3_pct"].astype(float) >= need).to_numpy()
+        c, b, s3 = (s[k].astype(float).to_numpy() for k in (cprim, "bpm_played", "sync3_pct"))
         row, flags = dict(runner=p), []
-        for name, ok in (("t_high_pct", synced), ("t_high_s3_pct", s3ok)):
-            broken = np.where(~ok)[0]
-            if not len(t):
+        # 값이 빈 단계는 '깨짐'이 아니라 '모름'이라 건너뛰고 표시한다
+        have_sync = np.isfinite(t) & np.isfinite(c) & np.isfinite(b)
+        have_s3 = np.isfinite(t) & np.isfinite(s3)
+        ok_sync, ok_s3 = np.zeros(len(t), bool), np.zeros(len(t), bool)
+        ok_sync[have_sync] = np.abs(c[have_sync] / b[have_sync] - 1) <= tol
+        ok_s3[have_s3] = s3[have_s3] >= need
+        for name, have, ok in (("t_high_pct", have_sync, ok_sync), ("t_high_s3_pct", have_s3, ok_s3)):
+            flags += [f"missing_{r}" for r, h in zip(s["ratio_pct"], have, strict=True)
+                      if not h and f"missing_{r}" not in flags]
+            tt, okk = t[have], ok[have]
+            broken = np.where(~okk)[0]
+            if not len(tt):
                 row[name] = NAN
             elif not len(broken):
-                row[name] = float(t[-1])
+                row[name] = float(tt[-1])
                 flags.append(f"{name}_not_broken")
             else:
-                row[name] = float(t[broken[0] - 1]) if broken[0] > 0 else NAN
+                row[name] = float(tt[broken[0] - 1]) if broken[0] > 0 else NAN
         row["flags"] = ";".join(flags)
         out.append(row)
     return pd.DataFrame(out)

@@ -20,7 +20,15 @@ import numpy as np
 import pandas as pd
 
 from walkmusic.config import ROOT, Params
-from walkmusic.exp2 import analyze_trial, h3_rows, h12_rows, prescription_upper, stage_summary
+from walkmusic.exp2 import (
+    analyze_trial,
+    empty_trial_result,
+    h3_rows,
+    h12_rows,
+    normalize_gait,
+    prescription_upper,
+    stage_summary,
+)
 from walkmusic.exp3 import analyze_gyro
 from walkmusic.io_sensorlogger import interval_stats, read_zip
 from walkmusic.jumps import analyze_jumps, q17_status
@@ -41,6 +49,10 @@ from walkmusic.units import determine_units, total_accel_g
 NAN = float("nan")
 SPRING_COLS = ("fmax_bw", "delta_y_m", "delta_l_m", "kvert_kn_m", "kleg_kn_m", "elastic_energy_j",
                "mean_grf_contact_bw")
+JUMP_COLS = ("flight_time_s", "flight_time_video_s", "height_m", "takeoff_v_flight_ms", "takeoff_v_int_ms",
+             "impulse_ns", "kinetic_energy_j", "pushoff_time_s", "mean_grf_push_bw", "peak_grf_push_bw")
+MANAGED_FLAGS = ("t_high_pct_not_broken", "t_high_s3_pct_not_broken", "inconsistent", "t_high는 실험 2 뒤",
+                 "bpm_high_from_exp1_pc")
 
 
 @dataclass
@@ -110,6 +122,9 @@ def _zip(paths: Paths23, runner: str, name: str) -> Path | None:
 def _file_qa(trial_id: str, rec, params: Params, name: str) -> list[dict]:
     """파일 단위 검사(Q02 샘플링, Q03 끊김)."""
     s = interval_stats(rec.t(name), params["qa.gap_warn_s"], params["qa.gap_fail_s"])
+    if "fs_hz" not in s:
+        return [dict(walk_id=trial_id, check_id="Q02", status="FAIL", value=str(s.get("n", 0)), threshold=">= 2",
+                     note=f"{name} 샘플이 2개 미만")]
     fs_ok = s["fs_hz"] >= params["qa.min_fs_hz"]
     gap = s.get("max_s", NAN)
     gap_st = "PASS" if gap <= params["qa.gap_warn_s"] else "WARN" if gap <= params["qa.gap_fail_s"] else "FAIL"
@@ -119,55 +134,99 @@ def _file_qa(trial_id: str, rec, params: Params, name: str) -> list[dict]:
                  threshold=f"<= {params['qa.gap_warn_s']}", note="가장 긴 끊김(s)")]
 
 
-def _imu(path: Path, params: Params):
-    rec = read_zip(path, params)
-    t, total, grav = total_accel_g(rec, determine_units(rec))
-    return rec, t, total, grav
+def _dup_zips(paths: Paths23) -> set[tuple[str, str]]:
+    """두 기록지에서 같은 사람·같은 zip이 두 줄 이상에 적힌 것(어느 시행인지 모르니 둘 다 센서 값을 내지 않는다)."""
+    seen: dict[tuple[str, str], int] = {}
+    for n in ("exp2_trials.csv", "exp3_swings.csv"):
+        for r in read_table(paths.data / n).to_dict("records"):
+            z = str(r.get("zip_file", "")).strip()
+            if z:
+                seen[(r["runner"], z)] = seen.get((r["runner"], z), 0) + 1
+    return {k for k, c in seen.items() if c > 1}
+
+
+def _fail(trial_id: str, value: str, note: str) -> dict:
+    return dict(walk_id=trial_id, check_id="Q01", status="FAIL", value=value, threshold="", note=note[:300])
+
+
+def _open(paths: Paths23, params: Params, r: dict, dups: set, qa: list[dict]):
+    """기록지 줄의 zip을 연다 → (Recording 또는 None, 경로 또는 None, 못 쓴 이유 flag). 문제는 QA 줄로 남긴다."""
+    tid, runner, name = r["trial_id"], r["runner"], str(r.get("zip_file", "")).strip()
+    if (runner, name) in dups:
+        qa.append(_fail(tid, name, "같은 zip이 기록지 여러 줄에 있다. 어느 시행인지 확인해 고친다(D-55)"))
+        return None, None, "duplicate_zip"
+    zp = _zip(paths, runner, name)
+    if zp is None:
+        qa.append(_fail(tid, name, f"zip 없음: '{name}'(zip_file을 채워야 한다, D-55). 기록지 값은 그대로 쓴다"))
+        return None, None, "no_zip"
+    try:
+        return read_zip(zp, params), zp, ""
+    except Exception as e:  # 깨진 zip 하나 때문에 그날 점검 전체가 멈추지 않게 한다
+        qa.append(_fail(tid, zp.name, f"읽기 오류 {type(e).__name__}: {e}"))
+        return None, zp, "read_error"
 
 
 def process_exp2(paths: Paths23, params: Params, body: dict, base: dict, video: dict
                  ) -> tuple[pd.DataFrame, dict, pd.DataFrame, pd.DataFrame, list[dict]]:
-    """기록지 + zip → (시행 표, 단계 중앙값용 체공·접촉, 점프 표, 현장 PC 표, QA 줄)."""
+    """기록지 + zip → (시행 표, 단계 중앙값용 체공·접촉, 점프 표, 현장 PC 표, QA 줄).
+
+    기록지 값(t30, N, 영상 판정)은 zip이 없거나 못 읽어도 남긴다(센서 값만 NaN, flags에 이유).
+    선택 열 `valid`가 0인 줄은 flags=invalid_sheet로 남기고 단계 요약·판정·현장 PC에서 뺀다.
+    """
     g = params["constants.g"]
     sheet = read_table(paths.data / "exp2_trials.csv")
+    dups = _dup_zips(paths)
     rows, phases, jump_rows, qa = [], {}, [], []
     for r in sheet.to_dict("records"):
         tid, runner, ratio = r["trial_id"], r["runner"], str(r.get("ratio_pct", "")).strip().upper()
-        zp = _zip(paths, runner, r.get("zip_file", ""))
-        if zp is None:
-            qa.append(dict(walk_id=tid, check_id="Q01", status="FAIL", value="", threshold="",
-                           note=f"zip 없음: '{r.get('zip_file', '')}'(zip_file을 채워야 한다, D-55)"))
-            continue
-        rec, t, total, grav = _imu(zp, params)
-        qa += _file_qa(tid, rec, params, "Accelerometer")
         mass = body.get(runner, {}).get("mass_kg", NAN)
+        rec, zp, why = _open(paths, params, r, dups, qa)
+        imu = None
+        if rec is not None:
+            try:
+                imu = total_accel_g(rec, determine_units(rec))
+                qa += _file_qa(tid, rec, params, "Accelerometer")
+            except Exception as e:  # 단위를 못 정하거나 표가 비었다: 이 시행만 센서 값 없이 둔다
+                qa.append(_fail(tid, zp.name, f"읽기 오류 {type(e).__name__}: {e}"))
+                why = "read_error"
         if ratio == "J":
-            js = analyze_jumps(t, total, grav, params, mass)
-            st = q17_status(len(js), params)
-            qa.append(dict(walk_id=tid, check_id="Q17", status=st, value=str(len(js)),
-                           threshold=f"{params['jump.n_jumps']}",
-                           note="체공(s): " + ", ".join(f"{j['flight_time_s']:.3f}" for j in js)))
-            for j in js:
-                j.update(runner=runner, trial_id=tid,
-                         flight_time_video_s=video.get((tid, "jump_flight", j["jump_no"]), NAN))
-                jump_rows.append(j)
+            if imu is not None:
+                js = analyze_jumps(*imu, params, mass)
+                qa.append(dict(walk_id=tid, check_id="Q17", status=q17_status(len(js), params), value=str(len(js)),
+                               threshold=f"{params['jump.n_jumps']}",
+                               note="체공(s): " + ", ".join(f"{j['flight_time_s']:.3f}" for j in js)))
+                for j in js:
+                    j.update(runner=runner, trial_id=tid,
+                             flight_time_video_s=video.get((tid, "jump_flight", j["jump_no"]), NAN))
+                    jump_rows.append(j)
             continue
         bpm = _f(r.get("bpm_played"))
-        s = analyze_trial(t, total, grav, params, bpm=bpm, t_in=_f(r.get("t_in_sensor_s")),
-                          t_out=_f(r.get("t_out_sensor_s")))
+        s = empty_trial_result()
+        if imu is not None:
+            s = analyze_trial(*imu, params, bpm=bpm, t_in=_f(r.get("t_in_sensor_s")), t_out=_f(r.get("t_out_sensor_s")))
         phases[tid] = (s.pop("_tf", np.array([])), s.pop("_tc", np.array([])))
-        flags = s.pop("flags")
+        flags = list(s.pop("flags")) + ([why] if why else [])
         t30, n = _f(r.get("t30_s")), _f(r.get("steps_N"))
-        v = params["exp2.analysis_m"] / t30 if np.isfinite(t30) and t30 > 0 else NAN
-        gait = str(r.get("gait_video", "")).strip().lower()
+        ok30 = bool(np.isfinite(t30) and t30 > 0)
+        v = params["exp2.analysis_m"] / t30 if ok30 else NAN
+        raw_gait = str(r.get("gait_video", "")).strip()
+        gait = normalize_gait(raw_gait)
+        if gait == "unknown":
+            flags.append("gait_label_unknown")
+            qa.append(dict(walk_id=tid, check_id="gait_video", status="WARN", value=raw_gait,
+                           threshold="walk/run/mixed(걷기/뛰기/섞임)", note="알 수 없는 영상 판정이라 판정에서 뺀다"))
+        if str(r.get("valid", "")).strip() == "0":
+            flags.append("invalid_sheet")
         row = dict(trial_id=tid, runner=runner, ratio_pct=ratio, repeat=r.get("repeat", ""), bpm_played=bpm,
                    direction=r.get("direction", ""), pc_field_sheet_spm=_f(r.get("pc_field_spm")), t30_s=t30,
-                   steps_N=n, v_ms=v, cadence_record_spm=n / t30 * 60 if np.isfinite(n) and np.isfinite(t30) else NAN,
-                   gait_video=gait, zip_file=zp.name, **s)
-        if gait and s["sensor_gait"] and {gait, s["sensor_gait"]} == {"walk", "run"}:
+                   steps_N=n, v_ms=v, cadence_record_spm=n / t30 * 60 if ok30 and np.isfinite(n) else NAN,
+                   gait_video=gait, zip_file=zp.name if zp else str(r.get("zip_file", "")), **s)
+        if gait in ("walk", "run") and s["sensor_gait"] in ("walk", "run") and gait != s["sensor_gait"]:
             flags.append("gait_mismatch")
         leg = body.get(runner, {}).get("leg_length_m", NAN)
         row["fr"] = froude(v, leg, g) if np.isfinite(v) and np.isfinite(leg) else NAN
+        for col in (*SPRING_COLS, "takeoff_angle_deg"):
+            row[col] = NAN
         if gait in ("run", "mixed"):
             tf, tc = row["flight_time_median_s"], row["contact_time_s"]
             if all(np.isfinite(x) for x in (mass, leg, v, tf, tc)):
@@ -182,7 +241,7 @@ def process_exp2(paths: Paths23, params: Params, body: dict, base: dict, video: 
     pcs = []
     if len(trials):
         for runner, d in trials.groupby("runner"):
-            silent = d[d["ratio_pct"] == "S"]
+            silent = d[(d["ratio_pct"] == "S") & ~d["flags"].str.contains("invalid_sheet")]
             calc = float(silent["cadence_record_spm"].mean()) if silent["cadence_record_spm"].notna().any() else NAN
             sheet_pc = float(d["pc_field_sheet_spm"].dropna().iloc[0]) if d["pc_field_sheet_spm"].notna().any() else NAN
             flags = []
@@ -245,6 +304,7 @@ def process_exp3(paths: Paths23, params: Params, body: dict, base: dict, video: 
     g = params["constants.g"]
     sheet = read_table(paths.data / "exp3_swings.csv")
     markers = read_table(paths.data / "video_markers.csv")
+    dups = _dup_zips(paths)
     frac = _fractions(params)
     measured = {}  # 사람 → 영상 마커로 잰 굽힘 각들(굽힌 다리는 3회 중 1회만 찍는다, PROTOCOL 4.5)
     for r in sheet.to_dict("records"):
@@ -255,18 +315,21 @@ def process_exp3(paths: Paths23, params: Params, body: dict, base: dict, video: 
     for r in sheet.to_dict("records"):
         tid, runner = r["trial_id"], r["runner"]
         knee = str(r.get("knee", "")).strip().lower() or ("bent" if "_K_" in tid else "straight")
-        zp = _zip(paths, runner, r.get("zip_file", ""))
-        if zp is None:
-            qa.append(dict(walk_id=tid, check_id="Q01", status="FAIL", value="", threshold="",
-                           note=f"zip 없음: '{r.get('zip_file', '')}'(zip_file을 채워야 한다, D-55)"))
+        rec, zp, _ = _open(paths, params, r, dups, qa)
+        if rec is None:
             continue
-        rec = read_zip(zp, params)
         if not rec.has("Gyroscope"):
-            qa.append(dict(walk_id=tid, check_id="Q01", status="FAIL", value="", threshold="Gyroscope",
-                           note="자이로 파일이 없다"))
+            qa.append(_fail(tid, zp.name, "자이로 파일이 없다"))
             continue
         qa += _file_qa(tid, rec, params, "Gyroscope")
-        s = analyze_gyro(rec.t("Gyroscope"), rec.xyz("Gyroscope"), params)
+        acc_t = acc_mag = None
+        if rec.has("Accelerometer"):  # 계단까지 걸어간 구간의 발 닿음을 찾는 데 쓴다(D-73)
+            try:
+                acc_t, total, _ = total_accel_g(rec, determine_units(rec))
+                acc_mag = np.linalg.norm(total, axis=1)
+            except Exception:  # 가속도를 못 써도 주기는 낸다(걷기 구간을 거르지 못할 뿐)
+                acc_t = acc_mag = None
+        s = analyze_gyro(rec.t("Gyroscope"), rec.xyz("Gyroscope"), params, acc_t=acc_t, acc_mag_g=acc_mag)
         flags = list(s.pop("flags"))
         if str(r.get("valid", "")).strip() == "0":
             flags.append("invalid_sheet")
@@ -364,10 +427,12 @@ def h2_variability_rows(summary: pd.DataFrame, paths: Paths23, params: Params) -
     tol = params["stats.same_tempo_pct"]
     for p, s in summary[summary["ratio_pct"].map(lambda r: str(r).replace(".", "", 1).isdigit())].groupby("runner"):
         e1 = segs[segs["participant"] == p]
-        t1, cv1 = e1["tempo_ratio_pct"].astype(float).to_numpy(), e1["cv_pct"].astype(float).to_numpy()
+        # 실험 1 표는 글자로 읽으므로 빈칸(걸음이 모자란 곡 구간)을 NaN으로 바꾼다
+        t1 = pd.to_numeric(e1["tempo_ratio_pct"], errors="coerce").to_numpy(float)
+        cv1 = pd.to_numeric(e1["cv_pct"], errors="coerce").to_numpy(float)
         pairs = []
         for st in s.to_dict("records"):
-            near = np.abs(t1 - st["tempo_ratio_pct"]) <= tol
+            near = (np.abs(t1 - st["tempo_ratio_pct"]) <= tol) & np.isfinite(cv1)
             if near.any() and np.isfinite(st.get("cv_pct", NAN)):
                 pairs.append((st["cv_pct"], float(np.nanmean(cv1[near]))))
         if not pairs:
@@ -381,25 +446,44 @@ def h2_variability_rows(summary: pd.DataFrame, paths: Paths23, params: Params) -
     return rows
 
 
-def fill_prescription(paths: Paths23, upper: pd.DataFrame) -> None:
-    """실험 1이 만든 prescription.csv의 요약 줄에 상한(T_high, T_high_s3, bpm_high)을 채운다."""
+def fill_prescription(paths: Paths23, upper: pd.DataFrame, pcs: pd.DataFrame | None = None) -> None:
+    """실험 1이 만든 prescription.csv의 요약 줄에 상한(T_high, T_high_s3, bpm_high)을 채운다. 다시 돌리면 덮어쓴다.
+
+    T_high는 현장 PC 대비 %(D-04)라 bpm_high = T_high × 현장 PC. 현장 PC가 없으면 실험 1 PC로 내고 표시한다.
+    T_low(실험 1 PC 대비)와는 %로 비교할 수 없어 inconsistent는 BPM으로 본다(bpm_low > bpm_high).
+    """
     path = paths.results / "prescription.csv"
     if not path.exists() or not len(upper):
         return
     pres = pd.read_csv(path)
+    for col in ("flags", "statement"):
+        if col in pres:
+            pres[col] = pres[col].astype(object).where(pres[col].notna(), "").astype(str)
+    if "pc_field_spm" not in pres:
+        pres["pc_field_spm"] = NAN
     up = upper.set_index("runner")
+    field = {} if pcs is None or not len(pcs) else dict(zip(pcs["runner"], pcs["pc_field_spm"], strict=True))
     for i, r in pres[pres["row_type"] == "summary"].iterrows():
         p = r["participant"]
         if p not in up.index:
             continue
-        th, ts = up.loc[p, "t_high_pct"], up.loc[p, "t_high_s3_pct"]
-        pres.loc[i, "t_high_pct"], pres.loc[i, "t_high_s3_pct"] = th, ts
-        pres.loc[i, "bpm_high"] = th / 100 * float(r["pc_spm"]) if np.isfinite(th) else NAN
-        flags = [f for f in str(r.get("flags", "")).split(";") if f and f != "nan" and f != "t_high는 실험 2 뒤"]
-        flags += [f for f in str(up.loc[p, "flags"]).split(";") if f]
-        tl = float(r["t_low_pct"]) if np.isfinite(_f(r["t_low_pct"])) else NAN
-        if np.isfinite(tl) and np.isfinite(th) and tl > th:
+        th, ts = _f(up.loc[p, "t_high_pct"]), _f(up.loc[p, "t_high_s3_pct"])
+        flags = [f for f in str(r.get("flags", "")).split(";")
+                 if f and f != "nan" and f not in MANAGED_FLAGS and not f.startswith("missing_")]
+        flags += [f for f in str(up.loc[p, "flags"]).split(";") if f and f != "nan"]
+        pcf = _f(field.get(p))
+        if np.isfinite(pcf):
+            bpm_high = th / 100 * pcf
+        else:
+            bpm_high = th / 100 * _f(r["pc_spm"])
+            flags.append("bpm_high_from_exp1_pc")
+        bl = _f(r.get("bpm_low"))
+        if np.isfinite(bl) and np.isfinite(bpm_high) and bl > bpm_high:
             flags.append("inconsistent")
+        pres.loc[i, "t_high_pct"] = th
+        pres.loc[i, "t_high_s3_pct"] = ts
+        pres.loc[i, "bpm_high"] = bpm_high
+        pres.loc[i, "pc_field_spm"] = pcf
         pres.loc[i, "flags"] = ";".join(flags)
     pres.to_csv(path, index=False, lineterminator="\n")
 
@@ -416,24 +500,29 @@ def run_exp23(paths: Paths23, params: Params, real: bool, allow_unfrozen: bool =
     body, base, video = body_table(paths), exp1_base(paths), video_seconds(paths)
     trials, phases, jumps, pcs, qa2 = process_exp2(paths, params, body, base, video)
     legs = {k: v.get("leg_length_m", NAN) for k, v in body.items()}
-    summary = stage_summary(trials, legs, params, sesoi={k: v.get("sesoi_pct", NAN) for k, v in base.items()},
-                            body=body, phases=phases) if len(trials) else pd.DataFrame()
+    used = trials[~trials["flags"].str.contains("invalid_sheet")] if len(trials) else trials  # valid=0 줄은 뺀다
+    summary = stage_summary(used, legs, params, sesoi={k: v.get("sesoi_pct", NAN) for k, v in base.items()},
+                            body=body, phases=phases) if len(used) else pd.DataFrame()
     swings, people3, qa3 = process_exp3(paths, params, body, base, video)
     rows = []
     if len(summary):
-        rows += h12_rows(summary, params) + h3_rows(trials, summary, params)
+        rows += h12_rows(summary, params) + h3_rows(used, summary, params)
         rows += h2_variability_rows(summary, paths, params)
     if len(people3):
         rows += h4_rows(people3, params)
     runners = sorted(set(trials.get("runner", pd.Series(dtype=str))) | set(people3.get("runner", pd.Series(dtype=str))))
     rows += group_rows([r for r in rows if r["participant"] != "ALL"], params, n_people=max(len(runners), 1))
     upper = prescription_upper(summary, params) if len(summary) else pd.DataFrame()
+    jsum = pd.DataFrame()
+    if len(jumps):  # 사람 값은 3회의 중앙값(SPEC §5.7)
+        jsum = jumps.groupby("runner")[list(JUMP_COLS)].median().reset_index()
+        jsum.insert(1, "n_jumps", jumps.groupby("runner").size().to_numpy())
     for df, name in ((trials, "exp2_stages.csv"), (summary, "exp2_summary.csv"), (pcs, "exp2_pc.csv"),
-                     (jumps, "jumps.csv"), (swings, "exp3_swings.csv"), (people3, "exp3_summary.csv"),
-                     (pd.DataFrame(rows), "hypotheses_exp23.csv"), (pd.DataFrame(qa2 + qa3), "qa_exp23.csv"),
-                     (upper, "prescription_upper.csv")):
+                     (jumps, "jumps.csv"), (jsum, "jumps_summary.csv"), (swings, "exp3_swings.csv"),
+                     (people3, "exp3_summary.csv"), (pd.DataFrame(rows), "hypotheses_exp23.csv"),
+                     (pd.DataFrame(qa2 + qa3), "qa_exp23.csv"), (upper, "prescription_upper.csv")):
         _write(df, out / name)
-    fill_prescription(paths, upper)
+    fill_prescription(paths, upper, pcs)
     inputs = [paths.data / n for n in ("exp2_trials.csv", "exp3_swings.csv", "participants.csv", "video_checks.csv",
                                        "video_markers.csv")]
     zips = [z for n in ("exp2_trials.csv", "exp3_swings.csv") for r in read_table(paths.data / n).to_dict("records")
@@ -604,7 +693,10 @@ def _detect_kind(path: Path, params: Params) -> tuple[str, float]:
     from walkmusic.exp2 import exp2_params
     from walkmusic.steps import detect_steps
 
-    rec = read_zip(path, params)
+    try:
+        rec = read_zip(path, params)
+    except Exception:  # 깨진 zip도 목록에는 남긴다
+        return "unreadable", NAN
     dur = float(rec.t("Accelerometer")[-1]) if rec.has("Accelerometer") else NAN
     if rec.has("Gyroscope"):
         s = analyze_gyro(rec.t("Gyroscope"), rec.xyz("Gyroscope"), params)

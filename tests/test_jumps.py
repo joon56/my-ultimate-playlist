@@ -66,3 +66,16 @@ def test_missing_mass_keeps_kinematics(params):
 @pytest.mark.parametrize("n, status", [(3, "PASS"), (2, "WARN"), (4, "WARN"), (0, "FAIL")])
 def test_q17_jump_count(params, n, status):
     assert jumps.q17_status(n, params) == status
+
+
+def test_quiet_long_before_jump_is_not_integrated(params):
+    # 가만히 선 구간이 이륙보다 한참 전이면(그 사이 움직임) 적분하지 않고 표시한다(검토 #7)
+    spec = JumpSpec(quiet_s=8.0, flight_times_s=(0.5,), seed=7)
+    t, total, grav, _ = make_jump_imu(spec)
+    dip = spec.handling_s + spec.quiet_s
+    sway = (t >= dip - 5.0) & (t < dip - 0.05)
+    total[sway, 2] += 0.08 * np.sin(2 * np.pi * 1.3 * t[sway])
+    r = jumps.analyze_jumps(t, total, grav, params, mass_kg=60.0)[0]
+    assert np.isnan(r["takeoff_v_int_ms"])
+    assert "quiet_far" in r["flags"]
+    assert np.isfinite(r["height_m"])  # 체공 기반 값은 그대로 낸다
