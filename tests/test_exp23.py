@@ -116,6 +116,19 @@ def test_waist_gait_rotation_is_not_taken_as_swing(tmp_path, params):
     assert _detect_kind(tmp_path / "run.zip", params)[0] == "trial"
 
 
+def test_gentle_swing_is_still_swing(tmp_path, params):
+    # 작게 흔든 진자(ω 봉우리 1 rad/s 미만, 2026-11-20 재시험 test-swing-2 0.74·test-swing-bent-2 0.81 rad/s)도 swing.
+    # 걷기·달리기는 회전축 조건으로 거르므로 각속도 기준은 분석 바닥값 수준이면 된다(D-73)
+    import numpy as np
+
+    from walkmusic.exp23 import _detect_kind
+    from walkmusic.synthetic import SwingSpec, make_swing_gyro, write_imu_zip
+
+    t, gyro, _ = make_swing_gyro(SwingSpec(period_s=1.45, omega_amp_rad_s=0.8, swing_s=25.0, seed=31))
+    write_imu_zip(tmp_path / "gentle.zip", t, np.tile([0.0, 0.0, 1.0], (len(t), 1)), gyro=gyro)
+    assert _detect_kind(tmp_path / "gentle.zip", params)[0] == "swing"
+
+
 @pytest.fixture(scope="module")
 def messy(tmp_path_factory, params):
     """현장 기록지가 덜 채워졌거나 틀린 경우(독립 검토 #1·#2·#3·#5와 작은 문제들)."""
