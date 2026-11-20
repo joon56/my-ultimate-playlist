@@ -330,10 +330,15 @@ def _jump_accel(tau: np.ndarray, spec: JumpSpec, flight_s: float) -> np.ndarray:
     return a
 
 
-def make_jump_imu(spec: JumpSpec) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[dict]]:
+def make_jump_imu(spec: JumpSpec, takeoff_level_g: float = 0.2, landing_level_g: float = 1.0
+                  ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[dict]]:
     """(t_s, 총 가속도 g N×3(몸 축: 앞뒤·좌우·위), Gravity N×3 m/s², 점프마다 정답).
 
-    정답: takeoff_s, landing_s, flight_s, v_takeoff_ms, lowest_s(적분 속도가 0을 위로 지난 시각), pushoff_s.
+    정답: takeoff_s, landing_s, flight_s, v_takeoff_ms, lowest_s(적분 속도가 0을 위로 지난 시각), pushoff_s, 그리고
+    사건 정의(D-77)대로의 값: takeoff_evt_s(밀기 뒤 수직 비력이 takeoff_level_g(`flight.a_thresh_g`) 아래로 처음
+    내려간 시각, 실제 이륙보다 몇 ms 앞),
+    landing_evt_s(착지 뒤 수직 비력이 landing_level_g(`jump.landing_level_g`)를 처음 넘는 시각), flight_evt_s,
+    v_evt_ms(이륙 사건 시각의 적분 속도), pushoff_evt_s.
     """
     rng = np.random.default_rng(spec.seed)
     one = spec.unweight_s + spec.push_s + max(spec.flight_times_s) + spec.land_s
@@ -352,13 +357,13 @@ def make_jump_imu(spec: JumpSpec) -> tuple[np.ndarray, np.ndarray, np.ndarray, l
         to = t0 + spec.unweight_s + spec.push_s
         up = np.where((v[:-1] <= 0) & (v[1:] > 0) & (fine[1:] < to - t0))[0]
         low = t0 + fine[up[-1] + 1]
-        f = 1.0 + af / G0  # 정의(SPEC §4.6)대로 0.2 g 문턱을 지나는 시각과 그때의 속도
-        below = np.where(f < 0.2)[0]
-        i_to = below[0]
-        i_land = below[-1] + 1
+        f = 1.0 + af / G0  # 사건 정의(SPEC §4.6, D-77)대로의 이륙·착지 시각과 그때의 속도
+        i_to = int(np.flatnonzero((f <= takeoff_level_g) & (fine >= spec.unweight_s))[0])
+        i_land = i_to + int(np.flatnonzero(f[i_to:] >= landing_level_g)[0])
         truth.append(dict(takeoff_s=to, landing_s=to + tf, flight_s=tf, v_takeoff_ms=G0 * tf / 2, lowest_s=low,
-                          pushoff_s=to - low, takeoff_thr_s=t0 + fine[i_to], flight_thr_s=fine[i_land] - fine[i_to],
-                          v_thr_ms=float(v[i_to]), pushoff_thr_s=t0 + fine[i_to] - low))
+                          pushoff_s=to - low, takeoff_evt_s=t0 + fine[i_to], landing_evt_s=t0 + fine[i_land],
+                          flight_evt_s=fine[i_land] - fine[i_to], v_evt_ms=float(v[i_to]),
+                          pushoff_evt_s=t0 + fine[i_to] - low))
     up = 1.0 + a / G0
     hand = (t < spec.handling_s) | (t > duration - spec.handling_s)
     f_body = np.column_stack([np.zeros_like(t), np.zeros_like(t), up])
