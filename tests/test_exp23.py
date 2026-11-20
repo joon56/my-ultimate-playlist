@@ -101,6 +101,21 @@ def test_link_proposal_by_recording_order(tmp_path, params):
     assert kinds["E2_A_J_1"] == "jump" and kinds["E3_B_K_2"] == "swing" and kinds["E2_C_150_1"] == "trial"
 
 
+def test_waist_gait_rotation_is_not_taken_as_swing(tmp_path, params):
+    # 허리 파우치 달리기: 골반이 세로축(중력 방향)으로 크게 돌아도(ω 2.7 rad/s) 진자가 아니다.
+    # 다리 흔들기는 수평축으로 돈다(D-73, 2026-11-20 혼자 시험: 흔들기 72–74°, 걷기·달리기 3–14°)
+    import numpy as np
+
+    from walkmusic.exp23 import _detect_kind
+    from walkmusic.synthetic import FRAMES, TrialSpec, make_trial_imu, write_imu_zip
+
+    t, f, _, _ = make_trial_imu(TrialSpec(cadence_spm=165, n_steps=80, run=True, n_sync=0, seed=21))
+    up = FRAMES["landscape"] @ np.array([0.0, 0.0, 1.0])  # 몸 위쪽을 폰 좌표로(write_imu_zip 기본 방향)
+    gyro = np.outer(2.7 * np.sin(2 * np.pi * (165 / 60 / 2) * t), up)  # 한 보(두 걸음) 주기의 골반 회전
+    write_imu_zip(tmp_path / "run.zip", t, f, gyro=gyro)
+    assert _detect_kind(tmp_path / "run.zip", params)[0] == "trial"
+
+
 @pytest.fixture(scope="module")
 def messy(tmp_path_factory, params):
     """현장 기록지가 덜 채워졌거나 틀린 경우(독립 검토 #1·#2·#3·#5와 작은 문제들)."""

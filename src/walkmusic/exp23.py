@@ -29,7 +29,7 @@ from walkmusic.exp2 import (
     prescription_upper,
     stage_summary,
 )
-from walkmusic.exp3 import analyze_gyro
+from walkmusic.exp3 import _principal, analyze_gyro
 from walkmusic.io_sensorlogger import interval_stats, read_zip
 from walkmusic.jumps import analyze_jumps, q17_status
 from walkmusic.metrics import (
@@ -684,11 +684,26 @@ def make_synthetic_exp23(root: Path, params: Params) -> dict:
 # --- zip 연결 제안(D-55: zip_file이 비면 기록 시작 순서로 기록지 시행 순서와 맞춘다. A가 확인한 뒤 채운다) ---
 
 
+def _axis_tilt_deg(rec, t0: float, t1: float) -> float:
+    """[t0, t1] 자이로 주축이 수직(평균 Gravity 방향)에서 기운 각(°). 다리 흔들기는 수평축(약 90°)으로 돌고,
+    허리 파우치 걷기·달리기는 골반이 세로축(약 0°)으로 돈다. Gravity가 없으면 90°(각으로 거르지 않는다)."""
+    if not rec.has("Gravity"):
+        return 90.0
+    tw, tg = rec.t("Gyroscope"), rec.t("Gravity")
+    w = rec.xyz("Gyroscope")[(tw >= t0) & (tw <= t1)]
+    g = rec.xyz("Gravity")[(tg >= t0) & (tg <= t1)]
+    if len(w) < 3 or len(g) == 0:
+        return 90.0
+    gm = (g / np.linalg.norm(g, axis=1, keepdims=True)).mean(axis=0)
+    return float(np.degrees(np.arccos(min(1.0, abs(float(_principal(w) @ (gm / np.linalg.norm(gm))))))))
+
+
 def _detect_kind(path: Path, params: Params) -> tuple[str, float]:
     """zip 하나가 진자(swing)·시행(trial)·점프(jump) 중 무엇처럼 보이는가와 기록 길이(s). 연결 확인용이다.
 
-    순서: 자이로 흔들림이 크고 이어지면 swing → 걷기 묶음이 있으면 trial(시작의 싱크 점프가 있어도) →
-    체공(`jump.min_flight_s` 이상)이 2개 이상이면 jump → 그 밖은 unknown.
+    순서: 자이로 흔들림이 크고 이어지며 회전축이 수직에서 `exp2.link_swing_min_axis_tilt_deg` 이상 기울면 swing →
+    걷기 묶음이 있으면 trial(시작의 싱크 점프가 있어도) → 체공(`jump.min_flight_s` 이상)이 2개 이상이면 jump →
+    그 밖은 unknown.
     """
     from walkmusic.exp2 import exp2_params
     from walkmusic.steps import detect_steps
@@ -701,7 +716,9 @@ def _detect_kind(path: Path, params: Params) -> tuple[str, float]:
     if rec.has("Gyroscope"):
         s = analyze_gyro(rec.t("Gyroscope"), rec.xyz("Gyroscope"), params)
         if (s["n_cycles_total"] >= params["pendulum.min_cycles"] // 2
-                and s["omega_peak_rad_s"] >= params["exp2.link_swing_min_omega_rad_s"]):
+                and s["omega_peak_rad_s"] >= params["exp2.link_swing_min_omega_rad_s"]
+                and _axis_tilt_deg(rec, s["swing_t0_s"], s["swing_t1_s"])
+                >= params["exp2.link_swing_min_axis_tilt_deg"]):
             return "swing", dur
     if rec.has("Accelerometer"):
         t, total, grav = total_accel_g(rec, determine_units(rec))
