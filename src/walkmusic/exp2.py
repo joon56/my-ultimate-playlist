@@ -5,8 +5,10 @@
 
 시행 하나(센서):
 1. 걸음 검출은 실험 1과 같고 걸음 간격 하한만 `exp2.min_interval_s`(0.23 s, D-56).
-2. 시행 = 걸음이 가장 많은 걷기 묶음. 싱크 점프 = 그 앞의 체공(§4.4) 가운데 마지막 `exp2.n_sync_jumps`개,
-   착지 시각을 `sync_jumps_sensor_s`로 낸다(영상 시각을 센서 시각으로 옮길 때 쓴다).
+2. 시행 = 걸음이 가장 많은 걷기 묶음. 싱크 점프 = 그 앞의 점프 사건(§4.6의 수직 점프와 같은 정의: 밀기 → 0.2 g
+   아래로 이륙 → 첫 충격 앞 1 g 위로 착지, D-77) 가운데 마지막 `exp2.n_sync_jumps`개, 착지 시각을
+   `sync_jumps_sensor_s`로 낸다(영상 시각을 센서 시각으로 옮길 때 쓴다). 가만히 선 구간 조건은 쓰지 않는다.
+   전에는 체공(§4.4)으로 찾았는데 파우치 출렁임으로 점프를 놓치거나 착지 뒤 튕김을 골랐다(D-80).
 3. 분석 창: 기록지의 `t_in_sensor_s`~`t_out_sensor_s`가 있으면 그 창, 없으면 그 묶음 걸음의 가운데
    `exp2.central_step_frac`(75%)이고 flags=central_steps(D-13).
 4. 창 안 유효 간격(0.23–`steps.max_interval_s`)으로 케이던스, S3·S5·반/두 배 박자, CV, 충격 중앙값.
@@ -23,7 +25,7 @@ import pandas as pd
 from walkmusic.config import Params
 from walkmusic.exp1 import _lowpass, _step_impacts
 from walkmusic.exp3 import _uniform
-from walkmusic.jumps import _crossing
+from walkmusic.jumps import _crossing, _jump_events
 from walkmusic.metrics import flight_events, froude, running_flight, spring_mass, sync_counts
 from walkmusic.orientation import vertical_signal
 from walkmusic.stats import _row
@@ -93,8 +95,11 @@ def analyze_trial(t: np.ndarray, total_g: np.ndarray, gravity: np.ndarray, param
     if len(st.bouts) > 1:
         out["flags"].append("multiple_bouts")
     b0, b1, _ = max(st.bouts, key=lambda b: b[2])
-    sync = [f for f in flights if f[1] < b0][-params["exp2.n_sync_jumps"]:]
-    out.update(n_sync_jumps=len(sync), sync_jump_sensor_s=";".join(f"{f[1]:.3f}" for f in sync))
+    av = vertical_signal(x[:, :3], x[:, 3:])
+    # 싱크 점프는 체공이 아니라 점프 사건(D-77)으로 찾는다: 공중에서 파우치가 출렁이면 체공을 놓치고, 착지 뒤 튕김이
+    # 체공으로 잡혀 엉뚱한 3개를 골랐다(D-80, 2026-11-20 test-sync·test-sync-2)
+    sync = [e for e in _jump_events(tg, av, fs, params) if e[2] < b0][-params["exp2.n_sync_jumps"]:]
+    out.update(n_sync_jumps=len(sync), sync_jump_sensor_s=";".join(f"{e[2]:.3f}" for e in sync))
     if len(sync) != params["exp2.n_sync_jumps"]:
         out["flags"].append(f"sync_jumps_{len(sync)}")
 
@@ -121,7 +126,6 @@ def analyze_trial(t: np.ndarray, total_g: np.ndarray, gravity: np.ndarray, param
             s3, s5 = sync_counts(c, bpm, params["sync.tol_pct"]), sync_counts(c, bpm, params["sync.tol_alt_pct"])
             out.update(sync3_pct=s3["sync_pct"], sync5_pct=s5["sync_pct"], sync3_half_pct=s3["n_half"] / len(c) * 100,
                        sync3_double_pct=s3["n_double"] / len(c) * 100)
-    av = vertical_signal(x[:, :3], x[:, 3:])
     imp = _step_impacts(tg, _lowpass(tg, av, params["steps.impact_lowpass_hz"]), steps,
                         params["steps.impact_window_s"])
     out["impact_g"] = float(np.nanmedian(imp)) if np.isfinite(imp).any() else NAN

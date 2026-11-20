@@ -396,16 +396,22 @@ class TrialSpec:
     seed: int = 0
 
 
-def make_trial_imu(spec: TrialSpec) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
+def make_trial_imu(spec: TrialSpec, takeoff_level_g: float = 0.2, landing_level_g: float = 1.0
+                   ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
     """(t_s, 총 가속도 g N×3(몸 축), Gravity N×3, 정답).
 
-    정답: sync_landing_s(싱크 점프 착지 시각들), step_times_s, flight_thr_s(달리기 체공을 0.2 g 문턱으로 잰 길이),
-    contact_thr_s, cadence_spm.
+    정답: sync_takeoff_s·sync_landing_s(싱크 점프의 실제 이륙·닿은 시각들), sync_landing_evt_s(점프 사건 정의(D-77,
+    D-80)대로의 착지: 착지 뒤 수직 비력이 landing_level_g를 처음 넘는 시각), step_times_s,
+    flight_thr_s(달리기 체공을 0.2 g 문턱으로 잰 길이), contact_thr_s, cadence_spm.
     """
     rng = np.random.default_rng(spec.seed)
     hop = JumpSpec(unweight_s=0.25, unweight_ms2=4.0, push_s=0.30, land_s=0.20)
     hop_len = hop.unweight_s + hop.push_s + spec.sync_flight_s + hop.land_s
     hops = [spec.handling_s + spec.stand_s + k * (hop_len + 0.8) for k in range(spec.n_sync)]
+    fine = np.arange(0.0, hop_len, 1e-4)
+    fh = 1.0 + _jump_accel(fine, hop, spec.sync_flight_s) / G0
+    i_to = int(np.flatnonzero((fh <= takeoff_level_g) & (fine >= hop.unweight_s))[0])
+    i_land = i_to + int(np.flatnonzero(fh[i_to:] >= landing_level_g)[0])
     t_go = (hops[-1] + hop_len if hops else spec.handling_s) + spec.stand_s
     period = 60.0 / spec.cadence_spm
     steps = t_go + np.concatenate([[0.0], np.cumsum(period * (1 + spec.interval_cv_pct / 100
@@ -417,7 +423,9 @@ def make_trial_imu(spec: TrialSpec) -> tuple[np.ndarray, np.ndarray, np.ndarray,
     for h0 in hops:
         a += _jump_accel(t - h0, hop, spec.sync_flight_s)
     up = 1.0 + a / G0
-    truth = dict(sync_landing_s=[h0 + hop.unweight_s + hop.push_s + spec.sync_flight_s for h0 in hops],
+    truth = dict(sync_takeoff_s=[h0 + hop.unweight_s + hop.push_s for h0 in hops],
+                 sync_landing_s=[h0 + hop.unweight_s + hop.push_s + spec.sync_flight_s for h0 in hops],
+                 sync_landing_evt_s=[h0 + fine[i_land] for h0 in hops],
                  cadence_spm=spec.cadence_spm, flight_thr_s=np.nan, contact_thr_s=np.nan)
     if spec.run:
         tc = period - spec.flight_s

@@ -40,7 +40,36 @@ def test_sync_jumps_found(walk_trial):
     r, truth = walk_trial
     assert r["n_sync_jumps"] == 3
     got = [float(x) for x in r["sync_jump_sensor_s"].split(";")]  # SPEC §5.7의 열 이름
-    assert got == pytest.approx(truth["sync_landing_s"], abs=0.02)
+    # 착지 = 충격 앞에서 수직 비력이 1 g를 위로 지난 시각(점프 사건 D-77, D-80). 실제로 닿은 때보다 수십 ms 늦다
+    assert got == pytest.approx(truth["sync_landing_evt_s"], abs=0.006)
+    assert all(0 < s - s_true < 0.06 for s, s_true in zip(got, truth["sync_landing_s"], strict=True))
+
+
+def test_bouncy_sync_hops_are_found(params):
+    # D-80: 2026-11-20 test-sync에서 공중의 폰이 파우치 안에서 출렁여 0.2 g 아래에 10–50 ms만 머물렀고, 체공(§4.4,
+    # 30 ms 이상)으로는 3번 중 1번만 잡혔다. 점프 사건(밀기 → 0.2 g 아래 → 충격)으로 찾는다
+    t, f, g, truth = make_trial_imu(TrialSpec(seed=13))
+    for t_to, t_land in zip(truth["sync_takeoff_s"], truth["sync_landing_s"], strict=True):
+        tau = t - t_to
+        fl = (tau > 0) & (t < t_land)
+        f[fl, 2] += -0.5 * np.sin(2 * np.pi * 10 * tau[fl]) * np.exp(-tau[fl] / 0.2)
+        f[fl, 0] += 0.4 * np.sin(2 * np.pi * 7 * tau[fl])
+    r = exp2.analyze_trial(t, f, g, params, bpm=130.0)
+    assert r["n_sync_jumps"] == 3
+    got = [float(x) for x in r["sync_jump_sensor_s"].split(";")]
+    assert got == pytest.approx(truth["sync_landing_evt_s"], abs=0.01)
+
+
+def test_rebound_after_last_hop_is_not_a_sync_jump(params):
+    # 2026-11-20 test-sync-2: 마지막 착지 0.4 s 뒤 몸이 한 번 튕겨 0.2 g 아래에 51 ms 머물렀다(뒤 충격 1.6 g).
+    # 체공으로 찾으면 둘째·셋째 점프와 이 튕김을 골라 3/3으로 보였다(영상과 한 칸 어긋남). 충격이 없으면 점프가 아니다
+    t, f, g, truth = make_trial_imu(TrialSpec(seed=14))
+    t_r = truth["sync_landing_s"][-1] + 0.4
+    for t0, t1, level in ((t_r - 0.05, t_r, 1.6), (t_r, t_r + 0.06, 0.05), (t_r + 0.06, t_r + 0.11, 1.6)):
+        f[(t >= t0) & (t < t1), 2] = level
+    r = exp2.analyze_trial(t, f, g, params, bpm=130.0)
+    got = [float(x) for x in r["sync_jump_sensor_s"].split(";")]
+    assert got == pytest.approx(truth["sync_landing_evt_s"], abs=0.006)
 
 
 def test_video_window_used_when_given(params):
