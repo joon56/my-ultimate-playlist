@@ -62,6 +62,30 @@ def test_fast_running_trial_flight_and_contact(params):
     assert r["contact_time_s"] == pytest.approx(truth["contact_thr_s"], abs=0.006)
 
 
+def _hide_flights(f, g, keep_every):
+    """파우치 출렁임 흉내: 체공(|a| < 0.2 g) 구간을 keep_every번째만 남기고 나머지는 0.5 g로 채운다."""
+    f = f.copy()
+    low = np.linalg.norm(f, axis=1) < 0.2
+    edges = np.flatnonzero(np.diff(np.r_[0, low.astype(int), 0]))
+    for k, (a, b) in enumerate(zip(edges[::2], edges[1::2], strict=True)):
+        if k % keep_every:
+            f[a:b] = 0.5 * g[a:b] / np.linalg.norm(g[a:b], axis=1, keepdims=True)
+    return f
+
+
+def test_few_phone_flights_leave_flight_values_blank(params):
+    # D-74: 폰이 체공을 걸음의 절반(`exp2.sensor_run_frac`) 미만에서만 잡으면 체공·접촉·상승 높이를 비운다
+    # (단계 중앙값에도 넣지 않아 스프링 지표도 빈다). 체공이 있는 걸음 비율과 센서 판정은 그대로 낸다.
+    t, f, g, _ = make_trial_imu(TrialSpec(cadence_spm=165, n_steps=60, run=True, flight_s=0.10, n_sync=0, seed=11))
+    r = exp2.analyze_trial(t, _hide_flights(f, g, 5), g, params, bpm=165.0)
+    assert 0 < r["flight_step_frac"] < params["exp2.sensor_run_frac"]
+    assert r["sensor_gait"] == "mixed"
+    assert np.isnan(r["flight_time_median_s"]) and np.isnan(r["contact_time_s"]) and np.isnan(r["rise_height_m"])
+    assert len(r["_tf"]) == 0 and len(r["_tc"]) == 0
+    assert "few_flights" in r["flags"]
+    assert r["cadence_median_spm"] == pytest.approx(165, rel=0.01)  # 걸음·케이던스는 그대로
+
+
 def _stage(runner, ratio, rep, **kw):
     base = dict(runner=runner, ratio_pct=str(ratio), repeat=rep, bpm_played=float(ratio), tempo_ratio_pct=float(ratio),
                 v_ms=1.5, cadence_median_spm=float(ratio), sync3_pct=90.0, gait_video="walk", flags="")

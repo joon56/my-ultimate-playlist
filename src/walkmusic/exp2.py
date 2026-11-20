@@ -12,6 +12,7 @@
 4. 창 안 유효 간격(0.23–`steps.max_interval_s`)으로 케이던스, S3·S5·반/두 배 박자, CV, 충격 중앙값.
 5. 체공: 창 안 체공 이벤트를 걸음 간격마다 더한 t_f, 접촉 t_c = 간격 − t_f. 체공 있는 걸음 비율, 체공·접촉 중앙값.
    센서 판정: 비율 ≥ `exp2.sensor_run_frac`이면 run, 0이면 walk, 사이는 mixed. 영상과 다르면 gait_mismatch.
+   센서 판정이 run이 아니면(체공이 걸음의 절반 미만에서만 잡힘) 체공·접촉 값을 비우고 few_flights(D-74).
 """
 
 from __future__ import annotations
@@ -134,13 +135,17 @@ def analyze_trial(t: np.ndarray, total_g: np.ndarray, gravity: np.ndarray, param
     has = tf > 0
     frac = float(has.mean()) if len(has) else NAN
     out["flight_step_frac"] = frac
-    if has.any():
+    out["sensor_gait"] = ("" if not np.isfinite(frac) else "run" if frac >= params["exp2.sensor_run_frac"]
+                          else "walk" if frac == 0 else "mixed")
+    if has.any() and out["sensor_gait"] != "run":
+        # 폰이 체공을 걸음의 절반 미만에서만 잡았다: 체공을 제대로 못 잰 것이라(허리 파우치 출렁임) 체공·접촉 값을
+        # 비우고 단계 중앙값에도 넣지 않는다. 그래서 스프링 지표도 빈다(D-74)
+        out["flags"].append("few_flights")
+    elif has.any():
         tfm = float(np.median(tf[has]))
         out.update(flight_time_median_s=tfm, contact_time_s=float(np.median(ivv[has] - tf[has])),
                    rise_height_m=params["constants.g"] * tfm**2 / 8)
-    out["sensor_gait"] = ("" if not np.isfinite(frac) else "run" if frac >= params["exp2.sensor_run_frac"]
-                          else "walk" if frac == 0 else "mixed")
-    out["_tf"], out["_tc"] = tf[has], ivv[has] - tf[has]  # 단계 중앙값용(표에는 쓰지 않는다)
+        out["_tf"], out["_tc"] = tf[has], ivv[has] - tf[has]  # 단계 중앙값용(표에는 쓰지 않는다)
     return out
 
 
