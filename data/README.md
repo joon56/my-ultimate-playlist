@@ -25,6 +25,7 @@ CSV는 UTF-8(BOM 없음)이다. 구글 시트에서 내려받았을 때 BOM이 �
 | `exp3_swings.csv` | 진자 시행 목록(곧은·굽힌 다리) | 현장 | 11/21(예비일 11/22) |
 | `video_checks.csv` | 영상에서 읽은 시간 값(점프 체공 프레임, 진자 10번 흔들림 시간) | 카메라 담당의 메모를 B가 옮김 | 11/23 |
 | `video_markers.csv` | 영상 프레임의 테이프 마커 좌표(착지 순간, 굽힌 다리 진자) | B 또는 C | 11/23 |
+| `video_exp2.csv` | 실험 2 영상 판독 내역(화면상 통과 시각, 시차 보정, 걸음 수, 걷기/뛰기 근거) | Claude Code(`tools/video/`) | 11/22 |
 | `debrief.csv` | 종료 설문(15회를 마친 뒤 한 번) | 각자 | 15회를 마친 날 |
 | `sections.example.csv` | 측정 구간 좌표 예시(가짜 값) | — | — |
 | `private/sections.csv` | 측정 구간 좌표(실제) | 각자 | 11/9 전 |
@@ -133,6 +134,23 @@ CSV는 UTF-8(BOM 없음)이다. 구글 시트에서 내려받았을 때 BOM이 �
 | `knee_x`, `knee_y` | 무릎 바깥(관절선) 마커 |
 | `ankle_x`, `ankle_y` | 바깥 복사뼈 마커 |
 | `measurer`, `notes` | 읽은 사람, 메모 |
+
+### video_exp2.csv
+
+실험 2 메인 카메라 영상을 `tools/video/`로 읽은 내역이다(DECISIONS D-83). 기록지 `exp2_trials.csv`의 `t30_s`·`steps_N`·`gait_video`·`direction`이 여기서 나왔다. 코드는 이 표를 읽지 않는다.
+
+| 열 | 설명 |
+|---|---|
+| `trial_id`, `video_file` | 시행과 영상 |
+| `direction` | 영상에서 본 방향(`→` 왼쪽에서 오른쪽, `←` 반대) |
+| `signal` | 디딤을 읽은 신호: `bright`(밝아짐, 흰 신발) · `any`(변화) |
+| `t_in_app_s`, `t_out_app_s`, `dt_app_s` | 디딤 줄이 두 물병의 x를 지난 영상 시각과 그 차(화면상 통과 시간) |
+| `d_m`, `k` | 걷는 줄과 물병 줄의 간격(m), 시차 보정 비율 k = 1 − d ÷ 15 m |
+| `t30_s`, `steps_N` | 30 m 통과 시간(dt_app ÷ k)과 그 구간의 디딤 수 |
+| `n_filled`, `n_irregular` | 구간 안에서 채운 디딤 수, 간격·보폭이 불규칙한 디딤 수 |
+| `cadence_interval_spm` | 구간 안 디딤 간격으로 낸 케이던스(걸음/분) |
+| `gait`, `gait_basis` | 걷기/뛰기 판정(빈칸은 판정 불가)과 근거 |
+| `flags`, `reader`, `notes` | 판독 표시, 도구 판, 메모 |
 
 ### debrief.csv
 
