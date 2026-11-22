@@ -94,7 +94,8 @@ python -m walkmusic qa --gate G1 --synthetic     # try the quality gate on gener
 | `python -m walkmusic all [--synthetic]` (`process` · `stats`) | Experiment 1 song segments, per-walk and per-person tables, hypothesis verdicts. Real data runs only after the analysis freeze tag |
 | `python -m walkmusic exp23 [--synthetic]` | Experiments 2–3: tempo-challenge trials and stages, vertical jumps, leg pendulum, verdicts for H1-2, H3, H4 and a short same-day field check |
 | `python -m walkmusic exp23 --links` | Propose which zip belongs to which challenge or pendulum row, by recording order |
-| *(next)* `figures` · `freeze` | Figures and the final data freeze |
+| `python -m walkmusic validation` · `sensitivity` · `figures` | Read the result tables and write the measurement validation table, the sensitivity table and the four key figures (`--synthetic` for generated data) |
+| `python -m walkmusic freeze --version 1.0` | Freeze the result tables into `results/frozen/v1.0/` (an existing version is never overwritten) |
 
 ## Repository layout
 

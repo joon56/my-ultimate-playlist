@@ -94,7 +94,8 @@ python -m walkmusic qa --gate G1 --synthetic     # 합성 데모 회차로 품�
 | `python -m walkmusic all [--synthetic]` (`process` · `stats`) | 실험 1 곡 구간·회차·사람 표와 가설 판정. 실제 데이터는 분석 고정 태그가 있어야 돈다 |
 | `python -m walkmusic exp23 [--synthetic]` | 실험 2·3: 챌린지 시행·단계, 수직 점프, 다리 진자, 가설 1-2·3·4 판정과 현장 당일 점검 표 |
 | `python -m walkmusic exp23 --links` | 챌린지·진자 기록지 줄에 맞는 zip을 기록 순서로 제안 |
-| *(다음)* `figures` · `freeze` | 그림과 최종 데이터 동결 |
+| `python -m walkmusic validation` · `sensitivity` · `figures` | 결과 표를 읽어 측정 검증표, 민감도 표, 핵심 그림 4장을 만든다(`--synthetic`은 합성 자료) |
+| `python -m walkmusic freeze --version 1.0` | 결과 표를 `results/frozen/v1.0/`에 동결한다(같은 판은 덮어쓰지 않는다) |
 
 ## 폴더
 

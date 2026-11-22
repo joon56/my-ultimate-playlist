@@ -365,7 +365,7 @@ Sensor Logger는 기록 하나를 zip으로 내보낸다. 앱 공식 문서(awes
 | `zip_links.csv` | zip ↔ manifest 연결 제안 | zip_name, participant, start_kst, walk_id, diff_s, status(matched/none/ambiguous) |
 | `steps/<walk_id>_steps.csv` | 걸음 | step_idx, t_s, interval_s, cadence_inst_spm, impact_g, friction_req, valid, exclude_reason, song_idx |
 | `segments.csv` | 곡 구간 | walk_id, participant, condition, playlist, song_title, bpm, tempo_ratio_pct, n_valid_steps, valid_duration_s, cadence_median_spm, cadence_rate_spm, dC_pct, R, sync3_pct, sync5_pct, sync3_half_pct, sync3_double_pct, sub_super, cv_pct, impact_g, impact_rel_pct, friction_req, speed_ms, step_length_m, liking, familiarity, com_vertical_m, step_length_zh_m, change_class, pc_provisional, flags |
-| `walks.csv` | 회차 | walk_id, participant, walk_no, condition, date, duration_s, valid_duration_s, detected_steps, pedometer_steps, hand_count, cadence_median_spm, cadence_rate_spm, cv_pct, speed_doppler_ms, speed_section_ms, speed_diff_pct, com_vertical_m, step_length_zh_m, mean_av_g, qa_status, hurried, weather, flags |
+| `walks.csv` | 회차 | walk_id, participant, walk_no, condition, date, duration_s, valid_duration_s, detected_steps, pedometer_steps, hand_count, cadence_median_spm, cadence_rate_spm, cv_pct, speed_doppler_ms, section_time_s, section_gps_m, speed_section_ms, speed_doppler_section_ms, speed_diff_pct(측정 구간 안 Doppler 중앙값과 speed_section의 차이), com_vertical_m, step_length_zh_m, mean_av_g, qa_status, hurried, weather, flags |
 | `participants.csv` | 사람 | participant, n_silent, pc_spm, pc_provisional, silent_cv_pct, sesoi_pct, age, height_cm, mass_kg, leg_length_m, thigh_length_m, shank_length_m |
 | `hypotheses.csv` | 가설×사람 | hypothesis, participant, metric, value, ci_low, ci_high, n, criterion, supported, note (집단 행 포함) |
 | `g2_flags.csv` | 시나리오 신호 | flag_id, description, value, threshold, triggered, suggested_response |
@@ -376,10 +376,10 @@ Sensor Logger는 기록 하나를 zip으로 내보낸다. 앱 공식 문서(awes
 | `validation.csv` | 측정 검증(§5.10) | measure, participant, n, mean_a, mean_b, bias, loa_low, loa_high, mean_abs_diff, unit, resolution, method_a, method_b, note |
 | `prescription.csv` | 처방 범위(§4.5) | participant, row_type(playlist/summary), playlist, pc_spm, sesoi_pct, playlist_t_pct, playlist_dc_pct, change_class, t_low_pct, t_high_pct, t_high_s3_pct, bpm_low, bpm_high, statement, flags |
 | `demo/<이름>_steps.csv` | (선택) 데모 기록의 걸음 | t_s, cadence_inst_spm |
-| `sensitivity.csv` | 민감도 | 변형 이름, 영향받은 지표 |
+| `sensitivity.csv` | 민감도(D-89) | variant, description, hypothesis, participant, metric, value_base, value_variant, supported_base, supported_variant, n_base, n_variant, value_changed, supported_changed, note |
 | `tables/table1_participants.csv`, `table2_speed_decomposition.csv`, `table3_summary.csv`, `table4_jump_spring.csv` | 논문 표 | §8 |
 | `figures/*.png` | 그림 | §8 |
-| `frozen/v1.0/` | 동결본 | 위 CSV 복사 + `SHA256SUMS` (G3에서만, 덮어쓰기 거부) |
+| `frozen/v1.0/` | 동결본 | 위 CSV와 `run_info*.json` 복사 + `SHA256SUMS` (G3에서만, 덮어쓰기 거부, D-91) |
 | `run_info.json` | 실행 기록 | git 해시, 분석 고정 태그와 HEAD가 태그 뒤 몇 커밋인지, `unfrozen`, params 해시, 입력 파일 sha256, 패키지 버전, 시각 |
 
 ## 8. 그림과 표
@@ -469,7 +469,7 @@ tests/
 
 - 환경: Python 3.10 이상. 의존성은 numpy, pandas, scipy, matplotlib, (개발) pytest, ruff. 더 필요하면 이유를 `DECISIONS.md`에 적고 추가한다.
 - 모든 공개 함수에 타입 힌트와 단위를 적은 독스트링. 입출력(파일)과 계산(순수 함수)을 분리한다. 난수는 시드를 고정한다.
-- 명령: `python -m walkmusic inspect|qa|process|stats|figures|freeze|all`. 공통 옵션 `--walk ID`, `--participant X`, `--synthetic`.
+- 명령: `python -m walkmusic inspect|qa|process|stats|all|exp23|validation|sensitivity|figures|freeze`. 공통 옵션 `--walk ID`, `--participant X`, `--synthetic`.
 - `all`은 같은 입력이면 같은 출력을 낸다(멱등). 입력 파일 해시가 같으면 다시 계산하지 않는다.
 - 합성 데이터(`synthetic.py`): 알려진 케이던스·BPM 추종·체공·점프·진자 주기(곧은·굽힌 다리)를 가진 가짜 zip을 만들어, 45회 + 실험 2·3 전체가 실제 데이터 없이 끝까지 돌아가게 한다. 결과는 `results_synthetic/`에만 쓴다. 실제 형식은 Phase 0의 `DATA_FACTS.md`를 따른다.
 - 테스트: §9 예제 수치(손계산 노트 포함), 합성 신호 걸음 검출, 제외 규칙 경계, 곡 구간 계산(순환·`start_song`), 단위·부호 판별, 시범 파일 QA 실행, 좌표 열이 `results/`에 없는지, 배정표 재현, 재표집 재현성(같은 시드 → 같은 신뢰구간), 분석 고정 태그가 없을 때 `stats`가 멈추는지, 합성 점프·진자 신호에서 체공 시간·이륙 속도·주기를 되찾는지.
