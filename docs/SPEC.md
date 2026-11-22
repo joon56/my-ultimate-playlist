@@ -189,7 +189,7 @@ Sensor Logger는 기록 하나를 zip으로 내보낸다. 앱 공식 문서(awes
 | 운동에너지 | 이륙 순간 | ½ m v² = m g h (J) |
 | 밀기 구간 t_push | 적분 속도가 마지막으로 0을 아래에서 위로 지난 시각(가장 낮은 자세) ~ 이륙 | s |
 | 밀기 평균·최대 지면반력 | 밀기 구간 a_v,total의 평균과 최댓값. 평균은 1 + v_int ÷ (g t_push)와 같다 | BW |
-| 달리기 접촉·체공 | 실험 2 달리기 단계에서 걸음마다 체공 이벤트(§4.4)의 길이 t_f와 접촉 t_c = 걸음 간격 − t_f. 단계 값은 중앙값 | s |
+| 달리기 접촉·체공 | 실험 2 달리기 단계에서 걸음마다 체공 이벤트(§4.4)의 길이 t_f와 접촉 t_c = 걸음 간격 − t_f. 단계 값은 중앙값. 폰 체공이 걸음의 절반 미만에서만 잡혀 비는 달린 단계(D-74)는 발 카메라 프레임에서 읽은 접촉 t_c와 t_f = 걸음 간격 − t_c(영상에서 다음 발의 착지가 보이면 그 체공)를 참고값으로 쓴다(D-86, 2026-11-22) | s |
 | 최대 지면반력 F_max | 접촉 중 지면반력을 반 사인파로 본 근사(Morin et al., 2005) | F_max = m g (π ÷ 2)(t_f ÷ t_c + 1) (N, BW) |
 | 몸 중심 하강 Δy | | Δy = F_max t_c² ÷ (m π²) − g t_c² ÷ 8 (m) |
 | 다리 압축 ΔL | L = `participants.leg_length_m`, v = 30 ÷ t30 | ΔL = L − √(L² − (v t_c ÷ 2)²) + Δy (m) |
@@ -289,8 +289,8 @@ Sensor Logger는 기록 하나를 zip으로 내보낸다. 앱 공식 문서(awes
 - 단계 요약: 같은 사람·비율의 2회를 평균한다(`exp2_stages.csv`는 시행 단위, `exp2_summary.csv`는 단계 단위).
 - H3 판정: 사람마다 실시한 단계(`exp2.stage_ratios_pct`, 했으면 180·195% 포함)를 낮은 쪽부터 놓고, 마지막으로 걸은 단계의 Fr ≤ `stats.froude_walk_run`(0.5) ≤ 처음 뛴 단계의 Fr 이면 지지. 실시한 가장 높은 단계에서도 뛰지 않았으면 `flags=no_run` (G2의 'F6').
 - 영상 동기: 점프 3회 + 박수가 센서에서 큰 수직 가속도 3연타와 체공으로 보인다. 코드는 점프 3개의 센서 시각을 찾아 `sync_jump_sensor_s`로 낸다(영상 쪽 시각은 사람이 읽어 `t_in_sensor_s`로 옮긴다).
-- **수직 점프 [초안 D-37·D-77]:** `E2_<사람>_J_1` 기록에서 점프 사건(§4.6: 밀기 → 0.2 g 아래로 이륙 → 첫 충격 앞 1 g 위로 착지, 가만히 선 구간에서 시작한 것만)을 찾아 시각 순서로 번호를 매긴다(`jump.n_jumps`개가 아니면 QA Q17). 점프마다 t_f, h, v_flight, v_int, J, 운동에너지, t_push, 밀기 평균·최대 지면반력을 `jumps.csv`에 내고, 영상 값(`video_checks.csv`의 `jump_flight`)이 있으면 나란히 둔다. 사람 값은 3회의 중앙값이다. 챌린지 시작의 싱크 점프는 이 계산에 쓰지 않는다.
-- **달리기 스프링 [초안 D-39]:** 영상 판정이 `run.gait_for_spring`(`run`)인 단계에서 걸음마다 t_c, t_f를 구하고, 단계 중앙값으로 F_max, Δy, ΔL, k_vert, k_leg, 탄성에너지, 접촉 중 평균 지면반력, 달리기 이륙 각(§4.6)을 낸다. `mixed` 단계는 계산하되 `flags=mixed_gait`를 붙이고 표 4에는 넣지 않는다. 영상 값(`run_contact`, `run_flight`)이 있으면 측정 검증에 쓴다.
+- **수직 점프 [초안 D-37·D-77]:** `E2_<사람>_J_1` 기록에서 점프 사건(§4.6: 밀기 → 0.2 g 아래로 이륙 → 첫 충격 앞 1 g 위로 착지, 가만히 선 구간에서 시작한 것만)을 찾아 시각 순서로 번호를 매긴다(`jump.n_jumps`개가 아니면 QA Q17). 점프마다 t_f, h, v_flight, v_int, J, 운동에너지, t_push, 밀기 평균·최대 지면반력을 `jumps.csv`에 내고, 영상 값(`video_checks.csv`의 `jump_flight`)이 있으면 나란히 둔다. 사람 값은 3회의 중앙값이다. 챌린지 시작의 싱크 점프는 이 계산에 쓰지 않는다. 기록지의 `valid`가 0인 점프 줄은 `jumps.csv`에 flags=invalid_sheet로 남기고 사람 값에는 넣지 않는다(영상 체공 검증에만 쓰는 기록, D-87).
+- **달리기 스프링 [초안 D-39]:** 영상 판정이 `run.gait_for_spring`(`run`)인 단계에서 걸음마다 t_c, t_f를 구하고, 단계 중앙값으로 F_max, Δy, ΔL, k_vert, k_leg, 탄성에너지, 접촉 중 평균 지면반력, 달리기 이륙 각(§4.6)을 낸다. `mixed` 단계는 계산하되 `flags=mixed_gait`를 붙이고 표 4에는 넣지 않는다. 영상 값(`run_contact`, `run_flight`)이 있으면 측정 검증에 쓴다. 폰 값이 빈 달린 단계(영상 판정 run)는 그 영상 값으로 스프링 값을 낸다: 단계 표에 `phase_source=video`와 `n_contacts_video`, flags에 `tc_video`(체공을 걸음 간격 − 접촉으로 냈으면 `tf_from_cadence`)를 적는다. 참고값이고 표 4에 출처와 접촉 수를 함께 적는다(D-86).
 - **착지 무릎 각 [초안 D-38]:** `video_markers.csv`의 `contact` 행(대전자·무릎·바깥 복사뼈 픽셀 좌표)에서 무릎 안쪽 각(코사인 법칙), 굽힘 각(180° − 안쪽 각), 다리 각 θ = arctan(Δx ÷ Δy)(대전자 → 바깥 복사뼈 선과 수직선 사이)를 `knee_angles.csv`에 낸다. 100%와 150% 단계를 비교하는 기술용이다.
 - **(선택) 데모 기록:** 사용자가 요청하면 데모 촬영 때의 기록(템포 램프 등)에서 걸음 시각과 순간 케이던스만 `results/demo/<이름>_steps.csv`로 낸다(영상 편집용). 분석과 판정에는 쓰지 않는다.
 
@@ -301,7 +301,7 @@ Sensor Logger는 기록 하나를 zip으로 내보낸다. 앱 공식 문서(awes
 - C_pend = 120 ÷ P. P_model(L)과 주기 오차를 계산한다.
 - H4: 3명 모두 C_pend < PC 이면 지지. 세 사람 |주기 오차|의 평균이 `pendulum.valid_error_pct`(15%) 이하이면 모델 타당.
 - 참고: L = 0.9 m이면 P_model ≈ 1.59 s, C_pend ≈ 75 걸음/분(§9).
-- **무릎 굽힌 진자 [초안 D-41]:** `E3_<사람>_K_*`(`exp3_swings.knee=bent`)도 같은 방법으로 P_K를 구한다. 분절 모델 P_seg(0)과 P_seg(φ)(§4.4)를 계산해 실측 비율 P_K ÷ P와 나란히 낸다. φ는 `video_markers.csv`의 `pendulum_bent` 행이 있으면 그 굽힘 각, 없으면 `pendulum.bent_knee_deg`(90°)이고 `flags=knee_nominal`을 붙인다. 허벅지·정강이 길이가 비면 키에 `pendulum.fallback_thigh_over_H`·`pendulum.fallback_shank_over_H`를 곱하고 `flags=seg_len_from_height`를 붙인다.
+- **무릎 굽힌 진자 [초안 D-41]:** `E3_<사람>_K_*`(`exp3_swings.knee=bent`)도 같은 방법으로 P_K를 구한다. 분절 모델 P_seg(0)과 P_seg(φ)(§4.4)를 계산해 실측 비율 P_K ÷ P와 나란히 낸다. φ는 `video_markers.csv`의 `pendulum_bent` 행이 있으면 그 굽힘 각, 없으면 `pendulum.bent_knee_deg`(90°)이고 `flags=knee_nominal`을 붙인다. 허벅지·정강이 길이가 비면 키에 `pendulum.fallback_thigh_over_H`·`pendulum.fallback_shank_over_H`를 곱하고 `flags=seg_len_from_height`를 붙인다. 공칭 각 `pendulum.bent_knee_deg`일 때의 모델 비율도 `period_ratio_model_nominal`로 함께 낸다(D-84).
 - **진자 에너지 [초안 D-41]:** 시행마다 자이로 각속도를 적분한 각도에서 반 주기별 진폭 θ_amp와 각속도 봉우리 ω_peak를 구하고(첫·마지막 주기는 뺀다) ω_pred(§4.4)와의 비를 낸다. 판정에는 쓰지 않는다.
 - **영상 검증:** `video_checks.csv`의 `swing_10`(10번 흔들리는 시간)이 있으면 영상 주기 = 값 ÷ 10을 같은 시행의 P(또는 P_K)와 비교한다(§5.10).
 
@@ -369,8 +369,8 @@ Sensor Logger는 기록 하나를 zip으로 내보낸다. 앱 공식 문서(awes
 | `participants.csv` | 사람 | participant, n_silent, pc_spm, pc_provisional, silent_cv_pct, sesoi_pct, age, height_cm, mass_kg, leg_length_m, thigh_length_m, shank_length_m |
 | `hypotheses.csv` | 가설×사람 | hypothesis, participant, metric, value, ci_low, ci_high, n, criterion, supported, note (집단 행 포함) |
 | `g2_flags.csv` | 시나리오 신호 | flag_id, description, value, threshold, triggered, suggested_response |
-| `exp2_stages.csv` / `exp2_summary.csv` | 시행 / 단계 | runner, ratio_pct, repeat, bpm_played, pc_field_spm, tempo_ratio_pct, v_ms, cadence_record_spm, cadence_median_spm, sync3_pct, sync5_pct, cv_pct, impact_g, flight_step_frac, flight_time_median_s, rise_height_m, contact_time_s, fmax_bw, delta_y_m, delta_l_m, kvert_kn_m, kleg_kn_m, elastic_energy_j, takeoff_angle_deg, change_class, gait_video, fr, flags |
-| `exp3_swings.csv` | 진자 | runner, repeat, knee, knee_deg, swing_period_s, n_cycles, cadence_pend_spm, period_model_s, period_error_pct, period_model_seg_s, period_ratio_bent, amp_deg, omega_peak_rad_s, omega_pred_rad_s, video_period_s, leg_length_m, flags |
+| `exp2_stages.csv` / `exp2_summary.csv` | 시행 / 단계 | runner, ratio_pct, repeat, bpm_played, pc_field_spm, tempo_ratio_pct, v_ms, cadence_record_spm, cadence_median_spm, sync3_pct, sync5_pct, cv_pct, impact_g, flight_step_frac, flight_time_median_s, rise_height_m, contact_time_s, fmax_bw, delta_y_m, delta_l_m, kvert_kn_m, kleg_kn_m, elastic_energy_j, takeoff_angle_deg, change_class, gait_video, fr, phase_source, n_contacts_video(뒤의 둘은 단계 표만, D-86), flags |
+| `exp3_swings.csv` | 진자 | runner, repeat, knee, knee_deg, swing_period_s, n_cycles, cadence_pend_spm, period_model_s, period_error_pct, period_model_seg_s, period_ratio_bent, period_ratio_model, period_ratio_model_nominal, amp_deg, omega_peak_rad_s, omega_pred_rad_s, video_period_s, leg_length_m, flags |
 | `jumps.csv` | 점프 | runner, trial_id, jump_no, flight_time_s, flight_time_video_s, height_m, takeoff_v_flight_ms, takeoff_v_int_ms, impulse_ns, kinetic_energy_j, pushoff_time_s, mean_grf_push_bw, peak_grf_push_bw, flags |
 | `knee_angles.csv` | 영상 마커 각도 | trial_id, event, event_no, frame_no, knee_inner_deg, knee_flexion_deg, leg_angle_deg |
 | `validation.csv` | 측정 검증(§5.10) | measure, participant, n, mean_a, mean_b, bias, loa_low, loa_high, mean_abs_diff, unit, resolution, method_a, method_b, note |
