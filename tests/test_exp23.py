@@ -132,6 +132,8 @@ def test_gentle_swing_is_still_swing(tmp_path, params):
 @pytest.fixture(scope="module")
 def messy(tmp_path_factory, params):
     """현장 기록지가 덜 채워졌거나 틀린 경우(독립 검토 #1·#2·#3·#5와 작은 문제들)."""
+    import shutil
+
     import numpy as np
 
     root = tmp_path_factory.mktemp("messy")
@@ -151,6 +153,10 @@ def messy(tmp_path_factory, params):
     setv("E2_C_100_2", "t30_s", "0")  # 0으로 잘못 적었다
     s2["valid"] = ""  # 선택 열: 0이면 뺀다
     setv("E2_B_120_2", "valid", "0")
+    extra = s2[s2["trial_id"] == "E2_A_J_1"].iloc[0].copy()  # 검증에만 쓰는 두 번째 점프 기록(D-87)
+    extra["trial_id"], extra["zip_file"], extra["valid"] = "E2_A_J_2", "E2_A_J_2.zip", "0"
+    shutil.copy(paths.raw / "A" / "E2_A_J_1.zip", paths.raw / "A" / "E2_A_J_2.zip")
+    s2 = pd.concat([s2, extra.to_frame().T], ignore_index=True)
     s2.to_csv(paths.data / "exp2_trials.csv", index=False)
     (paths.raw / "C" / "E2_C_100_2.zip").write_bytes(b"not a zip")  # 깨진 zip
     seg = pd.read_csv(paths.results / "segments.csv")
@@ -210,3 +216,24 @@ def test_jump_person_medians(res):
     assert set(js.index) == {"A", "B", "C"}
     a = out["jumps"][out["jumps"]["runner"] == "A"]
     assert js.loc["A", "flight_time_s"] == pytest.approx(a["flight_time_s"].median())  # SPEC §5.7: 3회 중앙값
+
+
+def test_invalid_jump_row_is_kept_but_not_in_person_summary(messy):
+    # D-87: valid=0인 점프 줄은 jumps.csv에 남기고(영상 체공 검증용) 사람 중앙값에는 넣지 않는다
+    out, paths = messy
+    js = out["jumps"]
+    extra = js[js["trial_id"] == "E2_A_J_2"]
+    assert len(extra) == 3 and extra["flags"].str.contains("invalid_sheet").all()
+    summ = pd.read_csv(paths.results / "jumps_summary.csv").set_index("runner")
+    assert summ.loc["A", "n_jumps"] == 3
+    used = js[(js["runner"] == "A") & ~js["flags"].str.contains("invalid_sheet")]
+    assert summ.loc["A", "flight_time_s"] == pytest.approx(used["flight_time_s"].median())
+
+
+def test_bent_knee_model_ratio_also_given_for_nominal_angle(res):
+    # D-84(K-85): 잰 무릎 각의 모델 비율과 공칭 90°의 모델 비율을 함께 낸다
+    out, _, _ = res
+    p3 = out["people3"].set_index("runner")
+    assert 0.8 < p3.loc["A", "period_ratio_model_nominal"] < p3.loc["A", "period_ratio_model"] < 1.0  # 85° < 90°
+    sw = out["swings"].set_index("trial_id")
+    assert pd.isna(sw.loc["E3_A_1", "period_ratio_model_nominal"])  # 곧은 다리 줄에는 없다

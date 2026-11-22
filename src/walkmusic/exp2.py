@@ -173,11 +173,14 @@ def _gait(values: pd.Series) -> str:
 
 
 def stage_summary(trials: pd.DataFrame, legs: dict[str, float], params: Params, sesoi: dict[str, float] | None = None,
-                  body: dict[str, dict] | None = None, phases: dict[str, tuple] | None = None) -> pd.DataFrame:
+                  body: dict[str, dict] | None = None, phases: dict[str, tuple] | None = None,
+                  video: dict[tuple[str, str, int], float] | None = None) -> pd.DataFrame:
     """시행 표 → 단계 표(사람 × 비율). 수치는 시행 평균, Fr는 평균 속도로(D-57), 평균 동조(D-54).
 
     body가 있으면(사람 → mass_kg) 달리기 단계의 스프링 값을 단계 중앙값 t_c·t_f로 계산한다(D-39).
     phases: trial_id → (t_f 배열, t_c 배열). 없으면 시행 중앙값의 평균을 쓴다.
+    video: (trial_id, kind, 번호) → 초(`video_checks.csv`). 폰 체공이 빈(D-74) 달린 단계는 발 카메라 프레임의
+    접촉 시간 `run_contact`로 낸다(D-86). 체공은 `run_flight`가 있으면 그 값, 없으면 걸음 간격 − 접촉.
     """
     g = params["constants.g"]
     tol = params["sync.tol_pct"] / 100
@@ -208,6 +211,25 @@ def stage_summary(trials: pd.DataFrame, legs: dict[str, float], params: Params, 
             row.update(flight_time_median_s=float(np.median(tf_all)), contact_time_s=float(np.median(tc_all)),
                        rise_height_m=g * float(np.median(tf_all)) ** 2 / 8)
         tfm, tcm = row.get("flight_time_median_s", NAN), row.get("contact_time_s", NAN)
+        tids = set(d["trial_id"]) if "trial_id" in d else set()
+        seen = {kind: [x for (i, k, _), x in (video or {}).items() if i in tids and k == kind and np.isfinite(x)]
+                for kind in ("run_contact", "run_flight")}
+        row["phase_source"] = "phone" if np.isfinite(tfm) and np.isfinite(tcm) else ""
+        row["n_contacts_video"] = len(seen["run_contact"])
+        if row["gait_video"] == "run" and not row["phase_source"] and seen["run_contact"]:  # D-86
+            tcm = float(np.median(seen["run_contact"]))
+            flags.append("tc_video")
+            if seen["run_flight"]:
+                tfm = float(np.median(seen["run_flight"]))
+            else:  # 다음 발의 착지가 화면 밖이다: 걸음 간격에서 접촉을 뺀다(SPEC §4.6과 같은 관계)
+                tfm = 60 / c - tcm if np.isfinite(c) and c > 0 else NAN
+                flags.append("tf_from_cadence")
+            row.update(contact_time_s=tcm, phase_source="video")
+            if np.isfinite(tfm) and tfm > 0:
+                row.update(flight_time_median_s=tfm, rise_height_m=g * tfm**2 / 8)
+            else:  # 접촉이 걸음 간격보다 길다: 체공과 스프링 값은 내지 않는다
+                tfm = NAN
+                flags.append("no_flight_from_video")
         if row["gait_video"] in ("run", "mixed") and np.isfinite(mass) and np.isfinite(leg) and np.isfinite(v):
             if np.isfinite(tfm) and np.isfinite(tcm):
                 row.update({k: val for k, val in spring_mass(mass, tcm, tfm, v, leg, g).items()

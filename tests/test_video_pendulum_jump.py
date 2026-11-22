@@ -150,3 +150,24 @@ def test_apply_keeps_rows_entered_by_people(tmp_path, monkeypatch):
     marks = list(csv.DictReader(open(data / "video_markers.csv", encoding="utf-8")))
     assert len(marks) == 1 and marks[0]["trial_id"] == "E3_A_K_1" and marks[0]["event"] == "pendulum_bent"
     assert (marks[0]["hip_x"], marks[0]["knee_y"], marks[0]["ankle_x"]) == ("854.0", "530.4", "498.0")
+
+
+def test_apply_numbers_jumps_by_sensor_pairing(tmp_path, monkeypatch):
+    # D-87: 센서가 세지 않은 점프와 읽지 못한 점프는 줄을 만들지 않고, 번호는 센서의 점프 번호를 따른다
+    data, out = tmp_path / "data", tmp_path / "out"
+    data.mkdir()
+    out.mkdir()
+    _write_lines(data / "exp2_trials.csv", ["trial_id,runner,ratio_pct,video_file,video_fps",
+                                            "E2_A_J_2,A,J,A-JUMP.MOV,240"])
+    _write_lines(data / "exp3_swings.csv", ["trial_id,runner,knee,video_file,video_fps"])
+    flights = ((1, 0.53), (2, 0.60), (3, 0.51))
+    jumps = [dict(jump_no=k, flight_s=v, takeoff_s=10.0 * k, landing_s=10.0 * k + v) for k, v in flights]
+    (out / "A-JUMP_jumps.json").write_text(json.dumps(dict(jumps=jumps)), encoding="utf-8")
+    pairing = dict(pairs={"2": 1, "3": 2}, unread={"2": "착지 꺾이는 점을 찾지 못함"}, note="이륙 간격으로 짝지음")
+    (out / "A-JUMP_pairing.json").write_text(json.dumps(pairing, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["apply_pendulum_jump.py", str(out)])
+    apj.main()
+    checks = list(csv.DictReader(open(data / "video_checks.csv", encoding="utf-8")))
+    assert [(r["trial_id"], r["event_no"], r["value_s"]) for r in checks] == [("E2_A_J_2", "2", "0.510")]
+    assert "영상의 3번째 점프" in checks[0]["notes"] and "이륙 간격으로 짝지음" in checks[0]["notes"]

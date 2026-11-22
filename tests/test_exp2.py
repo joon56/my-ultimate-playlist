@@ -230,3 +230,46 @@ def test_stage_values_are_pooled_step_medians(params):
     s = exp2.stage_summary(tr, {"A": 0.9}, params, body={"A": {"mass_kg": 60.0}}, phases=phases).iloc[0]
     assert s["flight_time_median_s"] == pytest.approx(0.10)  # 걸음을 모은 중앙값(평균 0.12가 아니다, SPEC §4.6)
     assert s["contact_time_s"] == pytest.approx(0.20)
+
+
+def _run_stage(rep, **kw):
+    """폰 체공이 잡히지 않은 달린 시행(D-74: 체공·접촉 값이 빈다)."""
+    return _stage("A", 180, rep, trial_id=f"E2_A_180_{rep}", v_ms=3.4, cadence_median_spm=165.0, gait_video="run",
+                  flight_time_median_s=np.nan, contact_time_s=np.nan, **kw)
+
+
+def test_run_stage_uses_video_contact_when_phone_flight_is_blank(params):
+    # D-86: 접촉 시간은 발 카메라 프레임, 체공은 걸음 간격(60 ÷ 센서 케이던스)에서 접촉을 뺀 값
+    from walkmusic.metrics import spring_mass
+
+    tr = pd.DataFrame([_run_stage(1), _run_stage(2)])
+    video = {("E2_A_180_1", "run_contact", 1): 0.200, ("E2_A_180_2", "run_contact", 1): 0.210,
+             ("E2_A_180_2", "run_contact", 2): 0.220, ("E2_A_S_1", "run_contact", 1): 0.500}
+    s = exp2.stage_summary(tr, {"A": 0.9}, params, body={"A": {"mass_kg": 60.0}}, video=video).iloc[0]
+    tc, tf = 0.210, 60 / 165.0 - 0.210
+    assert (s["phase_source"], s["n_contacts_video"]) == ("video", 3)
+    assert s["contact_time_s"] == pytest.approx(tc) and s["flight_time_median_s"] == pytest.approx(tf)
+    assert {"tc_video", "tf_from_cadence"} <= set(s["flags"].split(";"))
+    want = spring_mass(60.0, tc, tf, 3.4, 0.9, params["constants.g"])
+    assert s["kleg_kn_m"] == pytest.approx(want["kleg_kn_m"]) and s["fmax_bw"] == pytest.approx(want["fmax_bw"])
+    assert s["rise_height_m"] == pytest.approx(params["constants.g"] * tf**2 / 8)
+
+
+def test_run_stage_prefers_video_flight_when_read(params):
+    tr = pd.DataFrame([_run_stage(1)])
+    video = {("E2_A_180_1", "run_contact", 1): 0.200, ("E2_A_180_1", "run_flight", 1): 0.120}
+    s = exp2.stage_summary(tr, {"A": 0.9}, params, body={"A": {"mass_kg": 60.0}}, video=video).iloc[0]
+    assert s["flight_time_median_s"] == pytest.approx(0.120) and "tf_from_cadence" not in s["flags"]
+
+
+def test_video_contact_does_not_replace_phone_values_or_walk_stages(params):
+    phone = pd.DataFrame([_stage("A", 180, 1, trial_id="E2_A_180_1", gait_video="run", flight_time_median_s=0.10,
+                                 contact_time_s=0.25)])
+    video = {("E2_A_180_1", "run_contact", 1): 0.200, ("E2_A_150_1", "run_contact", 1): 0.300}
+    s = exp2.stage_summary(phone, {"A": 0.9}, params, body={"A": {"mass_kg": 60.0}}, video=video).iloc[0]
+    assert s["phase_source"] == "phone" and s["contact_time_s"] == pytest.approx(0.25)  # 폰 값이 있으면 그대로
+    assert s["n_contacts_video"] == 1 and "tc_video" not in s["flags"]
+    blank = dict(flight_time_median_s=np.nan, contact_time_s=np.nan)
+    walk = pd.DataFrame([_stage("A", 150, 1, trial_id="E2_A_150_1", **blank)])
+    w = exp2.stage_summary(walk, {"A": 0.9}, params, body={"A": {"mass_kg": 60.0}}, video=video).iloc[0]
+    assert w["phase_source"] == "" and not np.isfinite(w["contact_time_s"])  # 걷기 단계는 영상 값으로 채우지 않는다

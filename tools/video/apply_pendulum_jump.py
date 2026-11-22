@@ -40,11 +40,19 @@ def main():
         f = out / f"{Path(vf).stem}_jumps.json"
         if not f.exists():
             continue
+        pf = out / f"{Path(vf).stem}_pairing.json"  # 센서가 센 점프와 짝지은 번호(D-87). 없으면 영상의 순서 그대로
+        pairing = json.loads(pf.read_text(encoding="utf-8")) if pf.exists() else None
         for j in json.loads(f.read_text(encoding="utf-8"))["jumps"]:
-            checks.append(dict(trial_id=tr["trial_id"], kind="jump_flight", event_no=j["jump_no"], video_file=vf, fps=tr.get("video_fps", ""),
+            no, extra = j["jump_no"], ""
+            if pairing:
+                if str(no) in pairing.get("unread", {}) or str(no) not in pairing["pairs"]:
+                    continue  # 짝이 없거나 읽지 못한 영상 점프는 줄을 만들지 않고 note에만 남긴다
+                extra = f" 영상의 {no}번째 점프. {pairing.get('note', '')}".rstrip()
+                no = pairing["pairs"][str(no)]
+            checks.append(dict(trial_id=tr["trial_id"], kind="jump_flight", event_no=no, video_file=vf, fps=tr.get("video_fps", ""),
                                frames="", value_s=f"{j['flight_s']:.3f}", measurer=MEASURER,
                                notes=f"영상 시각 이륙 {j['takeoff_s']:.3f} s, 착지 {j['landing_s']:.3f} s(신발 아래 끝 높이의 꺾이는 점, D-84). "
-                                     f"프레임 간격이 고르지 않아 프레임 수 대신 시각 차를 적음"))
+                                     f"프레임 간격이 고르지 않아 프레임 수 대신 시각 차를 적음{extra}"))
     sw = {r["stem"]: r for r in json.loads((out / "swing_results.json").read_text(encoding="utf-8"))} if (out / "swing_results.json").exists() else {}
     for vf, tr in sorted(swing_trials.items(), key=lambda kv: kv[1]["trial_id"]):
         r = sw.get(Path(vf).stem)

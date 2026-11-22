@@ -190,6 +190,7 @@ def process_exp2(paths: Paths23, params: Params, body: dict, base: dict, video: 
                 qa.append(_fail(tid, zp.name, f"읽기 오류 {type(e).__name__}: {e}"))
                 why = "read_error"
         if ratio == "J":
+            invalid = str(r.get("valid", "")).strip() == "0"  # 영상 체공 검증에만 쓰는 기록(D-87)
             if imu is not None:
                 js = analyze_jumps(*imu, params, mass)
                 qa.append(dict(walk_id=tid, check_id="Q17", status=q17_status(len(js), params), value=str(len(js)),
@@ -198,6 +199,8 @@ def process_exp2(paths: Paths23, params: Params, body: dict, base: dict, video: 
                 for j in js:
                     j.update(runner=runner, trial_id=tid,
                              flight_time_video_s=video.get((tid, "jump_flight", j["jump_no"]), NAN))
+                    if invalid:
+                        j["flags"] = ";".join(f for f in (j.get("flags", ""), "invalid_sheet") if f)
                     jump_rows.append(j)
             continue
         bpm = _f(r.get("bpm_played"))
@@ -356,7 +359,11 @@ def process_exp3(paths: Paths23, params: Params, body: dict, base: dict, video: 
         if all(np.isfinite(x) for x in (mass, thigh, shank)):
             seg = segment_pendulum(mass, thigh, shank, phi, g, frac)
             row["period_model_seg_s"] = seg["period_s"]
-            row["period_ratio_model"] = seg["period_s"] / segment_pendulum(mass, thigh, shank, 0.0, g, frac)["period_s"]
+            straight = segment_pendulum(mass, thigh, shank, 0.0, g, frac)["period_s"]
+            row["period_ratio_model"] = seg["period_s"] / straight
+            if knee == "bent":  # 공칭 무릎 각(90°)의 모델 비율도 함께 낸다(D-84, K-85)
+                nominal = segment_pendulum(mass, thigh, shank, params["pendulum.bent_knee_deg"], g, frac)["period_s"]
+                row["period_ratio_model_nominal"] = nominal / straight
             if np.isfinite(s["amp_deg"]):
                 row["omega_pred_rad_s"] = pendulum_energy(seg["mass_kg"], seg["com_dist_m"], seg["inertia_hip_kgm2"],
                                                           s["amp_deg"], g)["omega_pred_rad_s"]
@@ -387,6 +394,7 @@ def process_exp3(paths: Paths23, params: Params, body: dict, base: dict, video: 
                                period_model_seg_bent_s=_med(bt, "period_model_seg_s"),
                                period_ratio_bent=PK / P if np.isfinite(P) and np.isfinite(PK) else NAN,
                                period_ratio_model=_med(bt, "period_ratio_model"),
+                               period_ratio_model_nominal=_med(bt, "period_ratio_model_nominal"),
                                knee_deg=_med(bt, "knee_deg"), pc_spm=pc))
         ratio = sw["swing_period_s"] / sw["runner"].map({p["runner"]: p["swing_period_s"] for p in people})
         sw["period_ratio_bent"] = np.where(sw["knee"] == "bent", ratio, NAN)
@@ -502,7 +510,7 @@ def run_exp23(paths: Paths23, params: Params, real: bool, allow_unfrozen: bool =
     legs = {k: v.get("leg_length_m", NAN) for k, v in body.items()}
     used = trials[~trials["flags"].str.contains("invalid_sheet")] if len(trials) else trials  # valid=0 줄은 뺀다
     summary = stage_summary(used, legs, params, sesoi={k: v.get("sesoi_pct", NAN) for k, v in base.items()},
-                            body=body, phases=phases) if len(used) else pd.DataFrame()
+                            body=body, phases=phases, video=video) if len(used) else pd.DataFrame()
     swings, people3, qa3 = process_exp3(paths, params, body, base, video)
     rows = []
     if len(summary):
@@ -514,9 +522,10 @@ def run_exp23(paths: Paths23, params: Params, real: bool, allow_unfrozen: bool =
     rows += group_rows([r for r in rows if r["participant"] != "ALL"], params, n_people=max(len(runners), 1))
     upper = prescription_upper(summary, params) if len(summary) else pd.DataFrame()
     jsum = pd.DataFrame()
-    if len(jumps):  # 사람 값은 3회의 중앙값(SPEC §5.7)
-        jsum = jumps.groupby("runner")[list(JUMP_COLS)].median().reset_index()
-        jsum.insert(1, "n_jumps", jumps.groupby("runner").size().to_numpy())
+    if len(jumps):  # 사람 값은 3회의 중앙값(SPEC §5.7). valid=0인 줄의 점프는 넣지 않는다(D-87)
+        used_j = jumps[~jumps["flags"].fillna("").str.contains("invalid_sheet")]
+        jsum = used_j.groupby("runner")[list(JUMP_COLS)].median().reset_index()
+        jsum.insert(1, "n_jumps", used_j.groupby("runner").size().to_numpy())
     for df, name in ((trials, "exp2_stages.csv"), (summary, "exp2_summary.csv"), (pcs, "exp2_pc.csv"),
                      (jumps, "jumps.csv"), (jsum, "jumps_summary.csv"), (swings, "exp3_swings.csv"),
                      (people3, "exp3_summary.csv"), (pd.DataFrame(rows), "hypotheses_exp23.csv"),
