@@ -18,7 +18,7 @@ from scipy.signal import butter, filtfilt
 from walkmusic.config import ROOT, Params
 from walkmusic.io_sensorlogger import Recording, read_zip
 from walkmusic.links import fill_walk_ids, find_zip, sheet_time
-from walkmusic.metrics import sync_counts
+from walkmusic.metrics import com_vertical_displacement_m, step_length_zh, sync_counts
 from walkmusic.orientation import vertical_signal
 from walkmusic.qa import Paths, _hav, read_table
 from walkmusic.steps import analyze_recording
@@ -137,6 +137,46 @@ def _step_impacts(t: np.ndarray, av: np.ndarray, steps_t: np.ndarray, win_s: flo
     return np.array([av[a:b].max() if b > a else NAN for a, b in zip(lo, hi, strict=True)])
 
 
+def _step_com(t: np.ndarray, av: np.ndarray, iv: pd.DataFrame, g: float) -> np.ndarray:
+    """유효 걸음 간격마다 몸 중심 수직 변위 h_com(m). 유효하지 않은 간격은 NaN(SPEC §4.3, D-40)."""
+    lo = np.searchsorted(t, iv["t0"].to_numpy(float))
+    hi = np.searchsorted(t, iv["t1"].to_numpy(float), side="right")
+    return np.array([com_vertical_displacement_m(t[a:b], av[a:b], g) if ok else NAN
+                     for a, b, ok in zip(lo, hi, iv["valid"], strict=True)])
+
+
+def _zh(leg_length_m: float, h_com_m: float, params: Params) -> float:
+    """역진자 보폭(m). 다리 길이나 h_com이 없거나 h_com이 다리 길이의 두 배를 넘으면 NaN."""
+    if not (np.isfinite(leg_length_m) and np.isfinite(h_com_m)) or h_com_m > 2 * leg_length_m:
+        return NAN
+    return step_length_zh(leg_length_m, h_com_m, params["com.zh_correction"])
+
+
+def section_passing(rec: Recording, t_depart: float, t_arrive: float, waypoints: pd.DataFrame,
+                    radius_m: float) -> tuple[float, float] | None:
+    """측정 구간 시작·끝 웨이포인트에 가장 가까이 지난 위치 점의 시각 (t_in, t_out) (SPEC §5.5e).
+
+    Q08a와 같은 두 점이다(위치 점이 약 1 Hz라 시각은 ±0.5 s). 어느 쪽이든 `radius_m`보다 멀면 None.
+    오는 길이면 지난 순서로 놓는다. 좌표는 이 계산에만 쓴다.
+    """
+    if not rec.has("Location") or len(waypoints) < 2:
+        return None
+    loc = rec.sensors["Location"]
+    t = loc["t_s"].to_numpy(float)
+    sel = (t >= t_depart) & (t <= t_arrive)
+    if sel.sum() < 3:
+        return None
+    lat, lon = np.radians(loc["latitude"].to_numpy(float))[sel], np.radians(loc["longitude"].to_numpy(float))[sel]
+    pts = waypoints.sort_values("seq", key=lambda s: s.astype(int))
+    plat, plon = np.radians(pts["lat"].astype(float).to_numpy()), np.radians(pts["lon"].astype(float).to_numpy())
+    d0, d1 = _hav(lat, lon, plat[0], plon[0]), _hav(lat, lon, plat[-1], plon[-1])
+    i0, i1 = int(np.argmin(d0)), int(np.argmin(d1))
+    if d0[i0] > radius_m or d1[i1] > radius_m or i0 == i1:
+        return None
+    a, b = sorted((i0, i1))
+    return float(t[sel][a]), float(t[sel][b])
+
+
 def location_speeds(rec: Recording, a: float, b: float, params: Params) -> tuple[float, float]:
     """[a, b] 안 GPS 경로 속도(D-01)와 Doppler 중앙값(참고). 위치 점이 모자라면 NaN."""
     if not rec.has("Location"):
@@ -187,9 +227,15 @@ def _row_value(row: dict, key: str) -> str:
     return "" if v is None or (isinstance(v, float) and np.isnan(v)) else str(v)
 
 
-def process_walk(row: dict, paths: Paths, params: Params, music: pd.DataFrame,
-                 exclusions: pd.DataFrame) -> tuple[list[dict], dict, pd.DataFrame]:
-    """실험 1 회차 하나 → (곡 구간 줄들, 회차 줄, 걸음 표)."""
+def process_walk(row: dict, paths: Paths, params: Params, music: pd.DataFrame, exclusions: pd.DataFrame,
+                 person: dict | None = None, offset_shift_s: float = 0.0
+                 ) -> tuple[list[dict], dict, pd.DataFrame]:
+    """실험 1 회차 하나 → (곡 구간 줄들, 회차 줄, 걸음 표).
+
+    person: 그 사람의 leg_length_m(역진자 보폭), section_distance_m·waypoints(측정 구간 통과 속도). 없으면 그 값은 NaN.
+    offset_shift_s: 첫 곡 재생 시각을 이만큼 옮긴다(민감도 분석, SPEC §5.5d).
+    """
+    person = person or {}
     rec = read_zip(find_zip(paths.raw, row), params)
     units, st = analyze_recording(rec, params)
     t, total, g = total_accel_g(rec, units)
@@ -197,7 +243,13 @@ def process_walk(row: dict, paths: Paths, params: Params, music: pd.DataFrame,
     av_f = _lowpass(t, av, params["steps.impact_lowpass_hz"])
     iv = interval_table(st.t_s, st.t_depart, st.t_arrive, params, _manual_ranges(row["walk_id"], exclusions, params))
     iv["impact_g"] = _step_impacts(t, av_f, iv["t0"].to_numpy(), params["steps.impact_window_s"])
+    iv["com_vertical_m"] = _step_com(t, av, iv, params["constants.g"])
     iv["song_idx"] = -1
+    leg = float(person.get("leg_length_m", NAN))
+
+    def com(sel: pd.Series, measured: bool) -> float:
+        h = iv.loc[sel, "com_vertical_m"]
+        return float(np.nanmedian(h)) if measured and h.notna().any() else NAN
     flags = _walk_flags(rec, st, params)
     w0, w1 = st.t_depart + params["exclude.edge_s"], st.t_arrive - params["exclude.edge_s"]
     base = dict(walk_id=row["walk_id"], participant=row["participant"], condition=row["condition"])
@@ -210,17 +262,19 @@ def process_walk(row: dict, paths: Paths, params: Params, music: pd.DataFrame,
         m = segment_metrics(iv.loc[sel, "interval_s"], iv.loc[sel, "impact_g"], song.bpm if song else NAN, params)
         v_gps, v_dop = location_speeds(rec, a, b, params)
         sl = v_gps / (m[cprim] / 60) if np.isfinite(v_gps) and np.isfinite(m[cprim]) else NAN
+        h = com(sel, np.isfinite(m[cprim]))
         fl = [f for f in [m.pop("flags")] + [f for f in flags if f in ("gps_sparse", "sensor_gap")] if f]
         return dict(base, playlist=song.playlist if song else "", song_idx=song.idx if song else -1,
                     song_order=song.order if song else "", song_title=song.title if song else "",
                     bpm=song.bpm if song else NAN, seg_t0_s=a, seg_t1_s=b, **m, speed_ms=v_gps,
-                    speed_doppler_ms=v_dop, step_length_m=sl, flags=";".join(fl))
+                    speed_doppler_ms=v_dop, step_length_m=sl, com_vertical_m=h,
+                    step_length_zh_m=_zh(leg, h, params), flags=";".join(fl))
 
     segs: list[dict] = []
     if row["condition"] == "S" or _row_value(row, "status") == "no_song_segments":
         segs.append(seg_row(w0, w1, None))
     else:
-        offset = float(_row_value(row, "music_offset_s") or params["music.default_offset_s"])
+        offset = float(_row_value(row, "music_offset_s") or params["music.default_offset_s"]) + offset_shift_s
         bnd = params["exclude.boundary_s"]
         for song in song_timeline(row, music, offset, float(rec.t("Accelerometer")[-1])):
             a, b = max(song.t0 + bnd, w0), min(song.t1 - bnd, w1)
@@ -236,6 +290,17 @@ def process_walk(row: dict, paths: Paths, params: Params, music: pd.DataFrame,
         inside = np.where((pt >= w0) & (pt <= w1))[0]
         ped = float(pv[inside[-1]] - pv[inside[0]]) if len(inside) >= 2 else NAN
     in_w = (t >= w0) & (t <= w1)
+    h_walk = com(allv, np.isfinite(wm[cprim]))
+    sec = dict(section_time_s=NAN, section_gps_m=NAN, speed_section_ms=NAN, speed_doppler_section_ms=NAN,
+               speed_diff_pct=NAN)
+    dist = float(person.get("section_distance_m", NAN))
+    passed = section_passing(rec, st.t_depart, st.t_arrive, person.get("waypoints", pd.DataFrame()),
+                             params["speed.section_radius_m"]) if np.isfinite(dist) else None
+    if passed:  # 지도 거리 ÷ 통과 시간(검증값, D-01). 같은 사이의 GPS 경로 거리와 Doppler 중앙값을 나란히 둔다
+        dt = passed[1] - passed[0]
+        v_path, v_dop_sec = location_speeds(rec, passed[0], passed[1], params)
+        sec.update(section_time_s=dt, section_gps_m=v_path * dt, speed_section_ms=dist / dt,
+                   speed_doppler_section_ms=v_dop_sec, speed_diff_pct=(v_dop_sec - dist / dt) / (dist / dt) * 100)
     walk = dict(base, walk_no=_row_value(row, "walk_no"), date=_row_value(row, "date"),
                 status=_row_value(row, "status"), duration_s=float(rec.t("Accelerometer")[-1]),
                 valid_duration_s=wm["valid_duration_s"], n_valid_steps=wm["n_valid_steps"],
@@ -243,6 +308,7 @@ def process_walk(row: dict, paths: Paths, params: Params, music: pd.DataFrame,
                 hand_count=_row_value(row, "hand_step_count"), cadence_median_spm=wm["cadence_median_spm"],
                 cadence_rate_spm=wm["cadence_rate_spm"], cv_pct=wm["cv_pct"], impact_g=wm["impact_g"],
                 speed_ms=v_gps, speed_doppler_ms=v_dop, mean_av_g=float(av[in_w].mean()) if in_w.any() else NAN,
+                com_vertical_m=h_walk, step_length_zh_m=_zh(leg, h_walk, params), **sec,
                 t_depart_s=st.t_depart, t_arrive_s=st.t_arrive, hurried=_row_value(row, "hurried"),
                 weather=_row_value(row, "weather"), flags=";".join(flags))
     steps = iv.rename(columns={"t0": "t_s"}).assign(cadence_inst_spm=lambda d: 60 / d["interval_s"],
@@ -251,9 +317,26 @@ def process_walk(row: dict, paths: Paths, params: Params, music: pd.DataFrame,
                               "song_idx"]]
 
 
-def process_all(paths: Paths, params: Params, participant: str | None = None
+def _people(paths: Paths) -> dict[str, dict]:
+    """사람 → 다리 길이, 측정 구간 지도 거리, 구간 웨이포인트(없으면 빈 값). 좌표는 계산에만 쓴다."""
+    sec = read_table(paths.sections)
+    out = {}
+    for r in read_table(paths.participants).to_dict("records"):
+        def num(key: str, r=r) -> float:
+            try:
+                return float(r.get(key, ""))
+            except ValueError:
+                return NAN
+        way = sec[sec["participant"] == r["participant"]] if len(sec) else pd.DataFrame()
+        out[r["participant"]] = dict(leg_length_m=num("leg_length_m"), section_distance_m=num("section_distance_m"),
+                                     waypoints=way)
+    return out
+
+
+def process_all(paths: Paths, params: Params, participant: str | None = None, offset_shift_s: float = 0.0
                 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, pd.DataFrame]]:
     """manifest의 실험 1 회차를 모두 처리한다. status가 redo·excluded인 회차는 지표 없이 상태만 남긴다."""
+    people = _people(paths)
     rows = [r for r in fill_walk_ids(read_table(paths.manifest).to_dict("records"))
             if str(r.get("experiment", "")).upper() == "E1"
             and (participant is None or r["participant"] == participant)]
@@ -265,7 +348,7 @@ def process_all(paths: Paths, params: Params, participant: str | None = None
             walks.append(dict(walk_id=r["walk_id"], participant=r["participant"], condition=r["condition"],
                               walk_no=_row_value(r, "walk_no"), date=_row_value(r, "date"), status=r["status"]))
             continue
-        s, w, st = process_walk(r, paths, params, music, exclusions)
+        s, w, st = process_walk(r, paths, params, music, exclusions, people.get(r["participant"]), offset_shift_s)
         segs += s
         walks.append(w)
         steps[r["walk_id"]] = st

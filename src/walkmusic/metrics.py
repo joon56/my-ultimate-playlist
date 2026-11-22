@@ -254,6 +254,29 @@ def knee_angles(hip_xy: Sequence[float], knee_xy: Sequence[float], ankle_xy: Seq
     return dict(knee_inner_deg=inner, knee_flexion_deg=180.0 - inner, leg_angle_deg=math.degrees(math.atan2(dx, dy)))
 
 
+def com_vertical_displacement_m(t_s: Sequence[float], total_vertical_accel_g: Sequence[float], g: float) -> float:
+    """한 걸음(발 디딤 i ~ i+1) 안 몸 중심 수직 변위 h_com (m) (SPEC §4.3, D-40).
+
+    (a_v,total − 1) × g에서 걸음 안 평균을 빼고 적분해 속도, 속도에서 다시 평균을 빼고 적분해 위치, 최고 − 최저.
+    표본이 3개 미만이면 NaN.
+    """
+    t = np.asarray(t_s, dtype=float)
+    a = (np.asarray(total_vertical_accel_g, dtype=float) - 1.0) * g
+    if len(t) < 3:
+        return float("nan")
+    dt = np.diff(t)
+
+    def integral(x: np.ndarray) -> np.ndarray:  # 사다리꼴 누적 적분(첫 값 0)
+        return np.concatenate([[0.0], np.cumsum((x[1:] + x[:-1]) / 2.0 * dt)])
+
+    span = t[-1] - t[0]
+    a = a - integral(a)[-1] / span  # 평균은 시간 평균(적분 ÷ 걸음 길이)
+    v = integral(a)
+    v = v - integral(v)[-1] / span
+    z = integral(v)
+    return float(z.max() - z.min())
+
+
 def step_length_zh(leg_length_m: float, com_vertical_m: float, correction: float) -> float:
     """역진자 보폭 SL_ZH = K · 2√(2 l h − h²) (m) (Zijlstra & Hof 2003, D-40). K = `com.zh_correction`."""
     h = com_vertical_m
