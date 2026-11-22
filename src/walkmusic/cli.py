@@ -1,7 +1,8 @@
-"""명령줄: ``python -m walkmusic inspect|qa|process|stats|all|exp23``.
+"""명령줄: ``python -m walkmusic inspect|qa|process|stats|all|exp23|validation|sensitivity|figures|freeze``.
 
-process·stats·all은 실험 1, exp23은 실험 2·3이다. 실제 데이터는 분석 고정 태그가 있어야 돈다(D-35).
-figures·freeze는 아직 없다.
+process·stats·all은 실험 1, exp23은 실험 2·3이다. validation·sensitivity·figures는 이미 계산된 결과 표를 읽어
+측정 검증표·민감도 표·핵심 그림 4장을 만든다. freeze는 결과 표를 판 번호 폴더에 동결한다.
+실제 데이터의 가설 결과는 분석 고정 태그가 있어야 돈다(D-35).
 좌표 값과 기기 이름은 어떤 출력에도 쓰지 않는다.
 """
 
@@ -44,7 +45,74 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="zip_file이 빈 기록지 줄에 기록 시작 순서로 zip을 맞춘 제안만 낸다"
                           "(results/exp23_links.csv, D-55)")
     p23.add_argument("--date", help="--links에서 이 날짜(YYYY-MM-DD, 현지 시각)에 기록한 zip만 본다")
+    for name, text in (("validation", "측정 검증표(validation.csv, SPEC §5.10). 실험 1·2·3 결과 표를 읽는다"),
+                       ("sensitivity", "민감도 분석(sensitivity.csv, SPEC §6). 기본 결과는 바꾸지 않는다"),
+                       ("figures", "핵심 그림 4장과 그려진 값(figures/*.png·json, SPEC §8)")):
+        sp = sub.add_parser(name, help=text)
+        sp.add_argument("--synthetic", action="store_true", help="합성 자료로(results_synthetic/에만 쓴다)")
+        sp.add_argument("--allow-unfrozen", action="store_true", help="분석 고정 태그 없이 실제 데이터로 돌린다(D-35)")
+
+    p_fr = sub.add_parser("freeze", help="결과 표를 results/frozen/v<판>/에 동결한다(같은 판은 덮어쓰지 않는다)")
+    p_fr.add_argument("--version", required=True, help="판 번호(예: 1.0)")
     return ap
+
+
+def _run_report(command: str, synthetic: bool, allow_unfrozen: bool) -> int:
+    """validation·sensitivity·figures: 결과 폴더의 표를 읽어 검증표·민감도 표·그림을 쓴다."""
+    from walkmusic.config import ROOT, load_params
+    from walkmusic.exp1 import synthetic_paths
+    from walkmusic.exp23 import Paths23
+    from walkmusic.qa import Paths
+    from walkmusic.stats import FreezeError
+
+    params = load_params()
+    if synthetic:
+        out = ROOT / "results_synthetic"
+        p1, p23 = synthetic_paths(out / "exp1"), Paths23.under(out / "exp23")
+    else:
+        p1, p23 = Paths.real(), Paths23.real()
+        out = Path(p1.results)
+    try:
+        if command == "validation":
+            from walkmusic.validation import build_validation
+
+            df = build_validation(p1, p23.data, p23.results, params)
+            df.to_csv(out / "validation.csv", index=False, lineterminator="\n")
+            print(df[["measure", "participant", "n", "bias", "loa_low", "loa_high", "unit"]].to_string(index=False))
+        elif command == "sensitivity":
+            from walkmusic.sensitivity import run_sensitivity
+
+            df = run_sensitivity(p1, p23.results, params, real=not synthetic, allow_unfrozen=allow_unfrozen)
+            df.to_csv(out / "sensitivity.csv", index=False, lineterminator="\n")
+            flips = df[df["supported_changed"]]
+            print(f"변형 {df['variant'].nunique()}개, 줄 {len(df)}개, 판정이 달라진 줄 {len(flips)}개")
+            if len(flips):
+                print(flips[["variant", "hypothesis", "participant", "supported_base", "supported_variant"]]
+                      .to_string(index=False))
+        else:
+            from walkmusic.figures import make_figures
+
+            done = make_figures(p1.results, p23.results, out / "figures", params, real=not synthetic,
+                                allow_unfrozen=allow_unfrozen)
+            print("그림: " + ", ".join(v["figure"] for v in done.values()))
+    except FreezeError as e:
+        print(e)
+        return 3
+    print(f"결과 → {out}")
+    return 0
+
+
+def _run_freeze(version: str) -> int:
+    from walkmusic.config import ROOT
+    from walkmusic.freeze import freeze_results
+
+    try:
+        target = freeze_results(ROOT / "results", version)
+    except (FileExistsError, FileNotFoundError, ValueError) as e:
+        print(e)
+        return 2
+    print(f"동결 → {target}")
+    return 0
 
 
 def _run_exp23(synthetic: bool, allow_unfrozen: bool, links: bool, date: str | None) -> int:
@@ -131,6 +199,10 @@ def main(argv: list[str] | None = None) -> int:
         return _run_exp1(args.command, args.synthetic, args.allow_unfrozen)
     if args.command == "exp23":
         return _run_exp23(args.synthetic, args.allow_unfrozen, args.links, args.date)
+    if args.command in ("validation", "sensitivity", "figures"):
+        return _run_report(args.command, args.synthetic, args.allow_unfrozen)
+    if args.command == "freeze":
+        return _run_freeze(args.version)
     return 2  # pragma: no cover
 
 
