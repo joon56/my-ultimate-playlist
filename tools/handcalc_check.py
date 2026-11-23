@@ -636,7 +636,7 @@ def rows_conclusion(sh: Sheet, t, params, steps: dict | None) -> None:
 
     kl, dl = params["pendulum.k_over_L"], params["pendulum.d_over_L"]
     good = _used(t.sw)
-    sh.begin("HC-A9", kind, "12주차 τ = Iα·관성모멘트(p22–30). 주기 식은 교안 밖", "실측",
+    sh.begin("HC-A9", kind, "12주차 τ = Iα(p39, p41–43)·관성모멘트(p22–30). 주기 식은 교안 밖", "실측",
              f"C_pend = 120 ÷ P, P_model = 2π√(({kl:.3f}L)² ÷ (g × {dl:.3f}L)), 오차 = (P − P_model) ÷ P_model × 100")
     errs = []
     for p, cp, pm, err in (("A", "78.38", "1.680", "−8.89"), ("B", "83.40", "1.620", "−11.20")):
@@ -1720,7 +1720,7 @@ def rows_assumption(sh: Sheet, t, params) -> None:
         sh.add(f"{p} 다리를 수평으로 들 때 근육 힘 (N)", hz / 0.05, None, rf[4])
         sh.add(f"{p} 다리를 수평으로 들 때 근육 힘 (BW)", hz / 0.05 / mg[p], None, rf[5])
 
-    sh.begin("G-16", kind, "12주차 p54, p63 ΣT = Iα, p65 예제 3; 9주차 p38", st,
+    sh.begin("G-16", kind, "12주차 p55, p63 ΣT = Iα, p65 예제 3; 9주차 p38", st,
              "필요한 되돌림 토크 = 중력 토크 × (P ÷ 걸음 왕복 시간)². 근육이 더 내는 몫 = 그 배수 − 1",
              "실측: 진자 주기 P(HC-A10), PC(HC-A1) → 걸을 때 다리 한 번 왕복 = 120 ÷ PC. 가정: 걸을 때도 같은 진폭으로 단순 조화 운동처럼 흔든다")
     for p, rf in ref15.items():
