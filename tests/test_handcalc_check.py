@@ -99,6 +99,12 @@ def test_sync_count_counts_intervals_inside_band():
     assert hc.sync_count(t, 0.0, t[10], 105, 3.0, 0.23, 1.50)[:3] == (11, 10, 10)  # 창 밖 걸음은 세지 않는다
 
 
+def test_interval_cv_is_sample_sd_over_mean():
+    iv = [0.50, 0.52, 0.48, 0.50]
+    assert hc.interval_cv(iv) == pytest.approx(3.266, abs=5e-4)
+    assert hc.interval_cv(iv) == pytest.approx(m.cv_pct(iv, P["stats.sd_ddof"]))
+
+
 def test_reference_text_helpers():
     assert hc.same_as_ref(1741.75, "1,741.8")
     assert hc.same_as_ref(-8.886, "−8.89")
@@ -169,10 +175,16 @@ def test_real_tables_hand_equals_code_and_output_is_reproducible(tmp_path):
 
 
 @pytest.mark.skipif(not HAS_RAW, reason="원자료 zip이 없다")
-def test_real_step_times_reproduce_sync3():
-    steps = hc.detect_exp2_steps(["E2_A_100_1", "E2_A_100_2"])
-    sh = hc.build_sheet(hc.load_tables(), P, steps)
+def test_real_step_times_reproduce_sync3_and_interval_cv():
+    t = hc.load_tables()
+    trials = hc.step_trials(t, P)
+    assert {"E2_A_100_1", "E2_A_100_2"} <= set(trials)
+    sh = hc.build_sheet(t, P, hc.detect_exp2_steps(trials))
     rows = sh.of("HC-A6")
     assert len(rows) == 9
     assert all(r.match == "일치" for r in rows if r.code is not None)
     assert sh.get("HC-A6", "A 100% 단계 S3 (%)").ref_match == "같음"
+    cv = [r for r in sh.of("HC-A7") if r.item.endswith("걸음 간격 CV (%)")]  # 시행마다와 단계마다
+    assert len(cv) == len(trials) + len(hc.variability_pairs(t, P))
+    assert all(r.match == "일치" for r in cv)
+    assert [r.id for r in sh.rows if r.match == "불일치"] == []

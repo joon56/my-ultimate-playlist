@@ -275,6 +275,8 @@ def load_tables(root: Path = ROOT) -> SimpleNamespace:
     t.sw = pd.read_csv(res / "exp3_swings.csv")
     t.p3 = pd.read_csv(res / "exp3_summary.csv").set_index("runner")
     t.val = pd.read_csv(res / "validation.csv")
+    t.sens = pd.read_csv(res / "sensitivity.csv")
+    t.steps_dir = res / "steps"
     t.markers = pd.read_csv(dat / "video_markers.csv")
     t.vexp2 = pd.read_csv(dat / "video_exp2.csv")
     t.trials = pd.read_csv(dat / "exp2_trials.csv")
@@ -302,6 +304,34 @@ def detect_exp2_steps(trial_ids, root: Path = ROOT) -> dict[str, np.ndarray]:
     return out
 
 
+def variability_pairs(t, params) -> list[SimpleNamespace]:
+    """가설 2 변동성의 짝: 실험 2 단계마다 T가 ±same_tempo_pct 안이고 CV가 있는 실험 1 곡 구간(D-11)."""
+    same = params["stats.same_tempo_pct"]
+    num = t.s2[t.s2["ratio_pct"].str.isdigit()]
+    out = []
+    for p in sorted(num["runner"].unique()):
+        e1 = t.segs[(t.segs["participant"] == p) & (t.segs["condition"] != SILENT)]
+        for r in num[num["runner"] == p].itertuples():
+            near = ((e1["tempo_ratio_pct"] - r.tempo_ratio_pct).abs() <= same) & e1["cv_pct"].notna()
+            if near.any() and math.isfinite(r.cv_pct):
+                out.append(SimpleNamespace(p=p, ratio=r.ratio_pct, cv2=float(r.cv_pct), segs=e1[near]))
+    return out
+
+
+def step_trials(t, params) -> list[str]:
+    """걸음 시각이 필요한 실험 2 시행: HC-A6(A 100% 두 시행)과 HC-A7 변동성에 짝지은 단계의 시행."""
+    ids = ["E2_A_100_1", "E2_A_100_2"]
+    for q in variability_pairs(t, params):
+        ids += list(t.st2[(t.st2["runner"] == q.p) & (t.st2["ratio_pct"] == q.ratio)]["trial_id"])
+    return sorted(set(ids))
+
+
+def interval_cv(intervals) -> float:
+    """걸음 간격의 변동계수(%) = 표본 SD ÷ 평균 × 100."""
+    iv = np.asarray(intervals, float)
+    return float(iv.std(ddof=1) / iv.mean() * 100)
+
+
 def _used(df: pd.DataFrame) -> pd.DataFrame:
     return df[~df["flags"].fillna("").str.contains("invalid_sheet")]
 
@@ -314,6 +344,13 @@ def _hyp(t, h: str, p: str):
     d = t.hyp[(t.hyp["hypothesis"] == h) & (t.hyp["participant"] == p)]
     d = d[d["value"].notna()] if d["value"].notna().any() else d
     return d.iloc[-1]
+
+
+def _note_number(note, pattern: str) -> float:
+    """결과 표의 note 글에서 숫자 하나를 읽는다(없으면 NaN)."""
+    import re
+    m = re.search(pattern, str(note))
+    return float(m.group(1)) if m else float("nan")
 
 
 def _fractions(params) -> dict:
@@ -403,6 +440,22 @@ def rows_conclusion(sh: Sheet, t, params, steps: dict | None) -> None:
         sh.add(f"실험 1 {p} {pl} 평균 T (%)", t_hand[idx].mean(), pl_code.loc[(p, pl), "playlist_t_pct"], nd=1,
                inputs=f"곡 구간 {len(idx)}개의 BPM (results/segments.csv: bpm), PC {base.loc[p, 'pc_spm']:.2f} 걸음/분",
                formula="곡 구간마다 T = BPM ÷ PC × 100을 내고 평균한다")
+    for p, lo_ref, hi_ref in (("A", "100", "132"), ("B", "102", "135"), ("C", "84", "111")):
+        d = music[music["participant"] == p]
+        src = f"곡 구간 {len(d)}개의 BPM (results/segments.csv: bpm), PC {base.loc[p, 'pc_spm']:.2f} 걸음/분"
+        sh.add(f"실험 1 {p} 곡 구간 T, 최소 (%)", t_hand[d.index].min(), d["tempo_ratio_pct"].min(), lo_ref, inputs=src)
+        sh.add(f"실험 1 {p} 곡 구간 T, 최대 (%)", t_hand[d.index].max(), d["tempo_ratio_pct"].max(), hi_ref, inputs=src)
+    sh.add("실험 1 곡 BPM, 최소", None, music["bpm"].min(), "100", inputs="results/segments.csv: bpm", formula="읽은 값")
+    sh.add("실험 1 곡 BPM, 최대", None, music["bpm"].max(), "132", inputs="results/segments.csv: bpm", formula="읽은 값")
+    for p, vid_ref, sheet_ref in (("A", "100.7", "104.1"), ("B", "117.6", "116.9")):
+        sil2 = t.st2[(t.st2["runner"] == p) & (t.st2["ratio_pct"] == SILENT)]
+        cad = sil2["steps_N"] / sil2["t30_s"] * 60
+        src = (f"무음 두 시행의 영상 걸음 수 {lst(sil2['steps_N'], 0)}, 통과 시간 {lst(sil2['t30_s'], 2)} s "
+               "(results/exp2_stages.csv: steps_N, t30_s)")
+        sh.add(f"실험 2 {p} 현장 PC, 영상에서 다시 읽은 값 (걸음/분)", cad.mean(), t.pcs.loc[p, "pc_field_spm"], vid_ref, inputs=src,
+               formula="시행마다 걸음 수 ÷ 통과 시간 × 60을 내고 두 시행을 평균한다")
+        sh.add(f"실험 2 {p} 현장 PC, 스톱워치로 잰 값 (걸음/분)", None, t.pcs.loc[p, "pc_field_sheet_spm"], sheet_ref,
+               inputs="results/exp2_pc.csv: pc_field_sheet_spm", formula="읽은 값(기록지)")
 
     sh.begin("HC-A4", kind, "", "실측", "곡 구간마다 ΔC% = (C − PC) ÷ PC × 100을 내고 평균한다. |ΔC%| > SESOI이면 실질적 변화")
     for (p, pl), idx in music.groupby(["participant", "playlist"]).groups.items():
@@ -420,6 +473,36 @@ def rows_conclusion(sh: Sheet, t, params, steps: dict | None) -> None:
     sh.add("교차 확인: 속도 표의 케이던스 변화와 플레이리스트 평균 ΔC%의 최대 차 (%p)", worst, None, "0.15",
            inputs="속도 표의 조건별 평균 케이던스(속도가 있는 구간만), results/prescription.csv: playlist_dc_pct",
            formula="|(조건 케이던스 ÷ 무음 케이던스 − 1) × 100 − ΔC%|의 최댓값")
+    # 따라간 비율 R: 정의와 제외 규칙은 결과 전에 정했다(SPEC §4.2). 실험 2 단계의 R은 결과를 본 뒤 낸 탐색 값이다(D-85)
+    r_lo, r_hi = params["sync.r_exclude_low"], params["sync.r_exclude_high"]
+    explore = "탐색(결과를 본 뒤 낸 값, D-85)"
+    f_r = f"R = ΔC% ÷ (T − 100). T가 {r_lo:.0f}–{r_hi:.0f}%이면 내지 않는다"
+    r_ref = {"A": ("0.69", "0.69", "0.40", "0.25"), "B": ("1.04", "0.37", "0.28", "0.11"), "C": ("0.11", "0.56", "", "−0.13")}
+    for (p, pl), idx in music.groupby(["participant", "playlist"]).groups.items():
+        tm, dm = float(t_hand[idx].mean()), float(dc_hand[idx].mean())
+        src = f"플레이리스트 평균 T {tm:.2f}%, ΔC% {dm:+.2f}% (HC-A3, HC-A4)"
+        if r_lo <= tm <= r_hi:
+            sh.add(f"실험 1 {p} {pl} 따라간 비율 R은 내지 않는다(T가 {r_lo:.0f}–{r_hi:.0f}% 안)", inputs=src, formula=f_r)
+        else:
+            sh.add(f"실험 1 {p} {pl} 따라간 비율 R(플레이리스트 평균으로)", dm / (tm - 100), None, r_ref[p][int(pl[1]) - 1], inputs=src,
+                   formula=f_r)
+    r2_ref = {("A", "120"): "0.78", ("A", "135"): "0.72", ("A", "150"): "0.75", ("B", "120"): "0.67", ("B", "135"): "0.52",
+              ("B", "150"): "0.60"}
+    for r in t.s2[t.s2["ratio_pct"].isin(["120", "135", "150"])].itertuples():
+        pcf = float(t.pcs.loc[r.runner, "pc_field_spm"])
+        t2, dc2 = r.bpm_played / pcf * 100, (r.cadence_median_spm / pcf - 1) * 100
+        sh.add(f"탐색: 실험 2 {r.runner} {r.ratio_pct}% 단계 따라간 비율 R", dc2 / (t2 - 100), r.dC_pct / (r.tempo_ratio_pct - 100),
+               r2_ref[(r.runner, r.ratio_pct)], formula=f_r + ". 현장 PC 기준", status=explore,
+               inputs=f"T {t2:.2f}%, ΔC% {dc2:+.2f}% (튼 BPM {r.bpm_played:.0f}, 센서 케이던스 {r.cadence_median_spm:.2f}, 현장 PC {pcf:.2f}). "
+                      "코드 값은 results/exp2_summary.csv의 dC_pct ÷ (tempo_ratio_pct − 100)")
+    for p, ref in (("A", "0.48"), ("B", "0.53"), ("C", "0.22")):
+        d = music[music["participant"] == p]
+        keep = ~((t_hand[d.index] >= r_lo) & (t_hand[d.index] <= r_hi))
+        src = (f"곡 구간 {len(d)}개 가운데 T가 {r_lo:.0f}–{r_hi:.0f}%인 {int((~keep).sum())}개를 뺀 {int(keep.sum())}개 "
+               "(results/segments.csv: tempo_ratio_pct, dC_pct, R. config/params.toml: sync.r_exclude_low·high)")
+        sh.add(f"{p} 곡 구간 평균 R", (dc_hand[d.index][keep] / (t_hand[d.index][keep] - 100)).mean(), d["R"].mean(), ref, inputs=src,
+               formula=f_r + ". 남은 곡 구간의 평균")
+        sh.add(f"{p} R을 내지 않은 곡 구간 수", int((~keep).sum()), int(d["R"].isna().sum()), inputs=src, formula="센다", nd=0)
 
     sh.begin("HC-A5", kind, "", "실측", "T와 ΔC%를 각각 순위로 바꾸고(같은 값은 평균 순위) 순위의 피어슨 상관을 낸다")
     near_pct = params["sync.near_pc_pct"]
@@ -440,6 +523,21 @@ def rows_conclusion(sh: Sheet, t, params, steps: dict | None) -> None:
     sh.add("A 순위 차 제곱의 합 Σd²", d2, None, nd=1, formula="Σ(T 순위 − ΔC% 순위)²")
     sh.add("A 같은 값이 없을 때의 식으로 낸 값", rho_simple, None, nd=4,
            formula="1 − 6Σd² ÷ (n(n² − 1)). 같은 T가 있어 ρ와 조금 다르다")
+    for p, p_ref in (("A", "0.0006"), ("B", "0.2458"), ("C", "0.6866")):
+        h = _hyp(t, "H1", p)
+        sh.add(f"{p} 가설 1의 p(참고, 손계산하지 않음)", None, _note_number(h["note"], r"p=([0-9.]+)"), p_ref,
+               inputs="results/hypotheses.csv: note. 같은 회차의 곡 구간은 서로 독립이 아니라 참고다", formula="읽은 값")
+    h = _hyp(t, "H1", "A")
+    src = "results/hypotheses.csv: ci_low, ci_high (회차 단위로 다시 뽑아 낸 95% 구간, D-34)"
+    sh.add("A ρ의 회차 단위 신뢰구간, 아래", None, h["ci_low"], "−0.07", inputs=src, formula="읽은 값")
+    sh.add("A ρ의 회차 단위 신뢰구간, 위", None, h["ci_high"], "+0.87", inputs=src, formula="읽은 값")
+    need80 = params["exp2.h1_2_min_sync_frac"] * 100
+    b80 = music[(music["participant"] == "B") & (music["sync3_pct"] >= need80)]["sync3_pct"].sort_values(ascending=False)
+    src = "B의 곡 구간 S3 (results/segments.csv: sync3_pct). 지시 없이 들은 실험 1의 값"
+    sh.add(f"B S3가 {need80:.0f}% 이상인 곡 구간 수", len(b80), None, "2", inputs=src, formula="센다")
+    for k, ref in enumerate(("87", "81")):
+        if k < len(b80):
+            sh.add(f"B S3가 {need80:.0f}% 이상인 곡 구간 {k + 1}의 S3 (%)", None, b80.iloc[k], ref, inputs=src, formula="읽은 값")
 
     if steps:
         tol = params["sync.tol_pct"]
@@ -448,7 +546,7 @@ def rows_conclusion(sh: Sheet, t, params, steps: dict | None) -> None:
                  f"c_i = 60 ÷ 걸음 간격, |c_i − BPM| ≤ BPM의 {tol:.0f}%이면 동조, S3 = 동조 간격 수 ÷ 유효 간격 수 × 100")
         st = t.st2.set_index("trial_id")
         vals = []
-        for tid in sorted(steps):
+        for tid in ("E2_A_100_1", "E2_A_100_2"):
             r = st.loc[tid]
             n_steps, n_valid, n_in, s3 = sync_count(steps[tid], r["window_t0_s"], r["window_t1_s"], r["bpm_played"], tol,
                                                     lo, hi)
@@ -483,24 +581,50 @@ def rows_conclusion(sh: Sheet, t, params, steps: dict | None) -> None:
             d2 = d[d["step_length_m"].notna()]
             sh.add(f"{p} ρ(T, 보폭)", spearman(d2["tempo_ratio_pct"], d2["step_length_m"]),
                    _hyp(t, "H2_step_length", p)["value"], inputs=src, nd=2)
+    sh.add("B 충격 상관의 p(참고, 손계산하지 않음)", None, _note_number(_hyp(t, "H2_impact", "B")["note"], r"p=([0-9.]+)"), "0.71",
+           inputs="results/hypotheses.csv: note", formula="읽은 값")
+    # 변동성: 걸음 간격 CV를 걸음 목록에서 다시 낸다(실험 1은 results/steps, 실험 2는 다시 읽은 걸음 시각)
     same = params["stats.same_tempo_pct"]
-    num = t.s2[t.s2["ratio_pct"].str.isdigit()]
-    for p in sorted(num["runner"].unique()):
-        e1 = segs[(segs["participant"] == p) & (segs["condition"] != SILENT)]
-        pairs = []
-        for r in num[num["runner"] == p].itertuples():
-            near = ((e1["tempo_ratio_pct"] - r.tempo_ratio_pct).abs() <= same) & e1["cv_pct"].notna()
-            if near.any() and math.isfinite(r.cv_pct):
-                pairs.append((r.ratio_pct, float(r.cv_pct), float(e1.loc[near, "cv_pct"].mean())))
+    lo2, hi2 = params["exp2.min_interval_s"], params["steps.max_interval_s"]
+    f_cv = "CV = 걸음 간격의 표본 SD ÷ 평균 × 100(유효 간격만)"
+    stx = t.st2.set_index("trial_id")
+    cv_ref = {"A": ("3.33", "4.24"), "B": ("3.55", "2.40")}
+    pairs_by = {}
+    for q in variability_pairs(t, params):
+        cv1 = []
+        for s in q.segs.itertuples():
+            st1 = pd.read_csv(t.steps_dir / f"{s.walk_id}_steps.csv")
+            cv1.append(interval_cv(st1[st1["valid"] & (st1["song_idx"] == s.song_idx)]["interval_s"]))
+        src1 = (f"T가 실험 2 {q.ratio}% 단계와 ±{same:.0f}%p 안인 실험 1 곡 구간 {len(cv1)}개의 걸음 간격 "
+                "(results/steps/<회차>_steps.csv: interval_s, valid, song_idx)")
+        sh.add(f"{q.p} {q.ratio}% 단계와 짝지은 실험 1 곡 구간의 CV 평균 (%)", sum(cv1) / len(cv1), q.segs["cv_pct"].mean(), inputs=src1,
+               formula=f_cv + ". 곡 구간마다 내고 평균한다", nd=2)
+        cv2 = []
+        tids = list(t.st2[(t.st2["runner"] == q.p) & (t.st2["ratio_pct"] == q.ratio)]["trial_id"])
+        if steps and all(x in steps for x in tids):
+            for tid in tids:
+                r = stx.loc[tid]
+                ts = steps[tid][(steps[tid] >= r["window_t0_s"] - 1e-9) & (steps[tid] <= r["window_t1_s"] + 1e-9)]
+                iv = np.diff(ts)
+                cv2.append(interval_cv(iv[(iv >= lo2) & (iv <= hi2)]))
+                sh.add(f"{tid} 걸음 간격 CV (%)", cv2[-1], r["cv_pct"], formula=f_cv, nd=2,
+                       inputs=f"걸음 시각(zip을 패키지의 걸음 검출로 읽음), 분석 창 {r['window_t0_s']:.2f}–{r['window_t1_s']:.2f} s, "
+                              f"유효 간격 {lo2:.2f}–{hi2:.2f} s")
+            stage_cv = sum(cv2) / len(cv2)
+            sh.add(f"{q.p} {q.ratio}% 단계 걸음 간격 CV (%)", stage_cv, q.cv2, inputs=f"두 시행의 CV {lst(cv2, 2)}%", formula="두 시행의 평균",
+                   nd=2)
+        else:
+            stage_cv = q.cv2
+        pairs_by.setdefault(q.p, []).append((q.ratio, stage_cv, sum(cv1) / len(cv1)))
+    for p, pairs in pairs_by.items():
         h = _hyp(t, "H2_variability", p)
         a, b = sum(x[1] for x in pairs) / len(pairs), sum(x[2] for x in pairs) / len(pairs)
-        src = (f"실험 2 단계 {', '.join(x[0] + '%' for x in pairs)}의 걸음 간격 CV {lst([x[1] for x in pairs], 2)}% "
-               f"(results/exp2_summary.csv: cv_pct), T가 ±{same:.0f}%p 안인 실험 1 곡 구간의 CV 평균 "
-               f"{lst([x[2] for x in pairs], 2)}% (results/segments.csv: cv_pct)")
+        src = (f"실험 2 단계 {', '.join(x[0] + '%' for x in pairs)}의 걸음 간격 CV {lst([x[1] for x in pairs], 2)}%, "
+               f"T가 ±{same:.0f}%p 안인 실험 1 곡 구간의 CV 평균 {lst([x[2] for x in pairs], 2)}% (위의 줄)")
         f = f"실험 2 단계마다 T가 ±{same:.0f}%p 안인 실험 1 곡 구간을 짝짓고, 두 쪽 CV 평균의 차를 낸다"
         sh.add(f"{p} 변동성: 짝지은 단계 수", len(pairs), h["n"], inputs=src, formula="센다", nd=0)
-        sh.add(f"{p} 변동성: 실험 2 CV 평균 (%)", a, None, inputs=src, formula=f, nd=2)
-        sh.add(f"{p} 변동성: 실험 1 CV 평균 (%)", b, None, inputs=src, formula=f, nd=2)
+        sh.add(f"{p} 변동성: 실험 2 CV 평균 (%)", a, None, cv_ref[p][0], inputs=src, formula=f)
+        sh.add(f"{p} 변동성: 실험 1 CV 평균 (%)", b, None, cv_ref[p][1], inputs=src, formula=f)
         sh.add(f"{p} 변동성: 실험 2 − 실험 1 (%p)", a - b, h["value"], inputs=src, formula=f, nd=2)
 
     sh.begin("HC-A8", kind, "11주차 구심가속도(p60)", "실측(A·B)", "Fr = v² ÷ (g L)")
@@ -577,6 +701,7 @@ def rows_conclusion(sh: Sheet, t, params, steps: dict | None) -> None:
         else:
             sh.add(f"{p} 하한이 있는가(있으면 1, 없으면 0)", 0, int(pd.notna(summ.loc[p, "t_low_pct"])), inputs=src,
                    formula="조건을 채운 플레이리스트가 하나라도 있는가", nd=0)
+    num = t.s2[t.s2["ratio_pct"].str.isdigit()]
     for p, offs, ref_t, ref_b in (("A", {"100": "+0.48", "120": "−4.24"}, "104.3", "105.0"), ("B", {"100": "+5.91"}, "", "")):
         s = num[num["runner"] == p].copy()
         pcf = float(t.pcs.loc[p, "pc_field_spm"])
@@ -607,6 +732,18 @@ def rows_conclusion(sh: Sheet, t, params, steps: dict | None) -> None:
                int(pd.notna(summ.loc[p, "t_high_s3_pct"])), nd=0,
                inputs=f"첫 단계({first['ratio_pct']}%) S3 {first['sync3_pct']:.1f}% (results/exp2_summary.csv: sync3_pct)",
                formula=f"첫 단계의 S3가 {need:.0f}% 미만이면 상한이 없다")
+    # 민감도(D-89): 동조 기준을 ±5%로 넓혔을 때 A의 상한
+    s = num[num["runner"] == "A"].copy()
+    pcf = float(t.pcs.loc["A", "pc_field_spm"])
+    s["t_hand"] = s["bpm_played"] / pcf * 100
+    s = s.sort_values("t_hand")
+    ok5 = (((s["cadence_median_spm"] / s["bpm_played"] - 1) * 100).abs() <= 5.0).to_numpy()
+    n5 = int(np.argmin(ok5)) if not ok5.all() else len(ok5)
+    v5 = t.sens[(t.sens["variant"] == "sync_tol_5pct") & (t.sens["metric"] == "t_high_pct") & (t.sens["participant"] == "A")]
+    sh.add("민감도: 동조 기준을 ±5%로 넓히면 A 상한 T (현장 PC 대비 %)", float(s["t_hand"].iloc[n5 - 1]) if n5 else None,
+           v5.iloc[0]["value_variant"] if len(v5) else None, "124.1",
+           inputs="A 단계별 평균 동조 어긋남(위의 줄), results/sensitivity.csv: sync_tol_5pct의 t_high_pct",
+           formula="기준만 ±5%로 바꿔 같은 방법으로 낸다. 기본 결과는 그대로다")
 
     sh.begin("HC-A12", kind, "5주차 평균 속도(p35–38)", "실측(A·C)",
              "Δln v = Δln 보폭 + Δln 케이던스(무음 대비). 속도 표는 속도가 있는 곡 구간의 평균이고 보폭 = v ÷ (케이던스 ÷ 60)")
@@ -682,11 +819,16 @@ def rows_conclusion(sh: Sheet, t, params, steps: dict | None) -> None:
               "results/exp3_swings.csv: swing_period_s(폰), video_period_s(영상 10번 흔들림 ÷ 10)",
               dict(n="8", mean="+0.0043", pct="+0.28", sd="0.0142", low="−0.0235", high="+0.0322"),
               "+0.0073 −0.0064 −0.0120 +0.0216 −0.0112 −0.0025 +0.0213 +0.0167".split(), list(pv["trial_id"]))
+    sh.add("진자 주기: 영상 ÷ 폰 − 1의 평균 (%)", ((pv["video_period_s"] / pv["swing_period_s"] - 1) * 100).mean(), None, "−0.3",
+           inputs="results/exp3_swings.csv: swing_period_s, video_period_s", formula="같은 8짝을 영상 기준 비율로 본 값(부호가 반대다)")
     jv = t.jumps[t.jumps["flight_time_video_s"].notna()]
-    agreement("점프 체공(폰 − 240 fps 영상)", "s", jv["flight_time_s"], jv["flight_time_video_s"], "jump_flight", "ALL",
-              "results/jumps.csv: flight_time_s(폰), flight_time_video_s(영상). 짝 "
-              + ", ".join(f"{a:.4f}·{b:.3f}" for a, b in zip(jv["flight_time_s"], jv["flight_time_video_s"])) + " s",
-              dict(n="5", mean="+0.026", pct="+5.1"))
+    jnames = [f"{r.trial_id} 점프 {int(r.jump_no)}" for r in jv.itertuples()]
+    src_j = ("results/jumps.csv: flight_time_s(폰), flight_time_video_s(영상). E2_A_J_2는 영상이 있는 A의 낮 기록이고 "
+             "검증에만 쓴다(D-87). 점프 표의 A 값은 영상이 없는 저녁 기록 E2_A_J_1이다")
+    for name, r, ref in zip(jnames, jv.itertuples(), ("0.564", "0.555", "0.529", "0.523", "0.500")):
+        sh.add(f"점프 체공(폰 − 240 fps 영상): {name}의 폰 체공 (s)", None, r.flight_time_s, ref, inputs=src_j, formula="읽은 값")
+    agreement("점프 체공(폰 − 240 fps 영상)", "s", jv["flight_time_s"], jv["flight_time_video_s"], "jump_flight", "ALL", src_j,
+              dict(n="5", mean="+0.026", pct="+5.1"), "+0.048 +0.044 +0.031 +0.016 −0.009".split(), jnames)
     jj = _used(t.jumps)
     agreement("점프 이륙 속도(체공 − 가속도 적분)", "m/s", jj["takeoff_v_flight_ms"], jj["takeoff_v_int_ms"],
               "jump_takeoff_velocity", "ALL", "results/jumps.csv: takeoff_v_flight_ms, takeoff_v_int_ms",
@@ -698,6 +840,19 @@ def rows_conclusion(sh: Sheet, t, params, steps: dict | None) -> None:
               t.st2["cadence_median_spm"], "exp2_cadence", "ALL",
               "results/exp2_stages.csv: cadence_record_spm(영상 걸음 수 ÷ t30 × 60), cadence_median_spm(센서)",
               dict(n="30", mean="+0.077", pct="+0.1"))
+    vint = t.vexp2.set_index("trial_id")["cadence_interval_spm"]
+    sen = t.st2.set_index("trial_id")["cadence_median_spm"]
+    rel = ((vint / sen - 1) * 100).dropna()
+    src = ("data/video_exp2.csv: cadence_interval_spm(영상의 디딤 간격으로 낸 케이던스), results/exp2_stages.csv: "
+           "cadence_median_spm(센서). 위의 '걸음 수 ÷ 시간'과 다른 방법이다")
+    sh.add("실험 2 케이던스(영상 디딤 간격 ÷ 센서 − 1): 시행 수", len(rel), None, "30", inputs=src, formula="센다")
+    sh.add("실험 2 케이던스(영상 디딤 간격 ÷ 센서 − 1): 평균 (%)", rel.mean(), None, "+0.6", inputs=src)
+    sh.add("실험 2 케이던스(영상 디딤 간격 ÷ 센서 − 1): 표본 SD (%)", rel.std(ddof=1), None, "1.8", inputs=src)
+    sh.add("실험 2 케이던스(영상 디딤 간격 ÷ 센서 − 1): 2% 안인 시행 수", int((rel.abs() <= 2).sum()), None, "27", inputs=src, formula="센다")
+    v100 = t.val[t.val["measure"] == "steps_100"]
+    if len(v100):
+        sh.add("사전 점검: 직접 센 100걸음을 검출한 걸음 수", None, v100.iloc[0]["mean_a"], "102",
+               inputs="results/validation.csv: steps_100", formula="읽은 값")
     wa = t.walks[(t.walks["participant"] == "A") & t.walks["section_gps_m"].notna()]
     map_m = float(t.body.loc["A", "section_distance_m"])
     agreement("측정 구간 거리(GPS − 지도, A)", "m", wa["section_gps_m"], [map_m] * len(wa), "section_distance", "A",
@@ -778,6 +933,13 @@ def rows_pairs(sh: Sheet, t, params) -> None:
         sh.add(f"{name} 공중 거리 (m)", v * tf, None, dist_ref, inputs=src, formula="v t_f")
         sh.add(f"{name} 몸 중심 상승 (cm)", G * tf ** 2 / 8 * 100, r.rise_height_m * 100, rise_ref, inputs=src,
                formula="g t_f² ÷ 8")
+    fast = t.s2[t.s2["ratio_pct"].isin(["165", "180", "195"])]
+    for p, lo_ref, hi_ref in (("A", "2", "2"), ("B", "2", "5")):
+        f = fast[fast["runner"] == p]["flight_step_frac"] * 100
+        src = (f"{p}의 165% 이상 단계에서 폰이 체공을 잡은 걸음의 비율 {lst(f, 1)}% (results/exp2_summary.csv: flight_step_frac). "
+               "그래서 체공은 발 카메라에서 읽었다")
+        sh.add(f"{p} 폰이 체공을 잡은 걸음 비율, 최소 (%)", None, f.min(), lo_ref, inputs=src, formula="읽은 값")
+        sh.add(f"{p} 폰이 체공을 잡은 걸음 비율, 최대 (%)", None, f.max(), hi_ref, inputs=src, formula="읽은 값")
 
     sh.begin("HC-B5", kind, "10주차 p17 예제 5; 9주차 p45 힘–시간 곡선 아래 넓이 = 충격량, p53 에너지 보존", "실측",
              "h = g t_f² ÷ 8, 체공 v = g t_f ÷ 2, J = m × 체공 v, ½ m v², 밀기 평균 지면반력 = 1 + 적분 v ÷ (g t_push)")
@@ -863,6 +1025,11 @@ def rows_pairs(sh: Sheet, t, params) -> None:
                inputs=f"곧은 다리 모델 주기 {x.s.P:.4f} s, 실측 P {period[p]:.4f} s (HC-A10)", formula="(모델 ÷ 실측 − 1) × 100")
         sh.add(f"{p} 실측 P_K ÷ P", float(t.p3.loc[p, "swing_period_bent_s"]) / period[p], t.p3.loc[p, "period_ratio_bent"],
                rf[10], inputs="HC-A10의 P, P_K", formula="P_K ÷ P")
+        ratio_ref = {"A": ("0.937", "0.906"), "B": ("0.945", "0.902")}[p]
+        sh.add(f"{p} 모델의 굽힌 ÷ 곧은 주기 비, 잰 각", float(ub[ub["runner"] == p]["model"].median()) / x.s.P,
+               t.p3.loc[p, "period_ratio_model"], ratio_ref[0], inputs=src, formula="굽힌 다리 모델 주기 ÷ 곧은 다리 모델 주기")
+        sh.add(f"{p} 모델의 굽힌 ÷ 곧은 주기 비, 90°", x.r.P / x.s.P, t.p3.loc[p, "period_ratio_model_nominal"], ratio_ref[1],
+               inputs=src, formula="무릎 90° 모델 주기 ÷ 곧은 다리 모델 주기")
 
     sh.begin("HC-B8", kind, "12주차 p42 예제 1, p43 예제 2; 모멘트 팔 p13·p16, p18, p53", "계산만",
              "τ = m g d sin θ, α = τ ÷ I (잰 진폭 평균). 실측 주기로는 α = (2π ÷ P)² sin θ")
@@ -1013,6 +1180,15 @@ def rows_pairs(sh: Sheet, t, params) -> None:
                    formula="30 ÷ 단계 v. 검산 기준의 통과 시간은 이렇게 v에서 거꾸로 낸 값이다")
             sh.add(f"{r.runner} {name} 30 ÷ 단계 v × 60 (프레임)", 30 / r.v_ms * 60, None, rf[2], inputs=src,
                    formula="거꾸로 낸 통과 시간 × 60. 실제 프레임 수는 시행별 줄에 있다")
+    sl_ref = {"A": "0.76 0.75 0.76 0.81 0.84 1.01 1.24".split(), "B": "0.77 0.82 0.85 0.83 0.89 0.95 1.07 1.23".split()}
+    for p, refs_ in sl_ref.items():
+        for r, ref in zip(t.s2[t.s2["runner"] == p].itertuples(), refs_):
+            name = "무음" if r.ratio_pct == "S" else f"{r.ratio_pct}%"
+            sh.add(f"{p} {name} 단계 보폭 (m)", r.v_ms / (r.cadence_median_spm / 60), None, ref,
+                   inputs=f"단계 v {r.v_ms:.3f} m/s, 센서 케이던스 {r.cadence_median_spm:.2f} 걸음/분 (results/exp2_summary.csv: v_ms, "
+                          "cadence_median_spm)", formula="보폭 = v ÷ (케이던스 ÷ 60)")
+        sh.add(f"{p} 실험 2 시행 수", int((t.st2["runner"] == p).sum()), None, {"A": "14", "B": "16"}[p],
+               inputs="results/exp2_stages.csv", formula="센다")
 
     sh.begin("HC-B18", kind, "9주차 p46–49 일·파워, p48 양의 일, p52 일–에너지 정리; 10주차 p21 예제 8, p23 예제 10, p24 예제 11",
              "실측", "밀기 거리 d = 적분 v × t_push ÷ 2, W = 평균 지면반력 × d, P = W ÷ t_push (밀 때 힘이 일정하다고 본 근사)")
@@ -1611,7 +1787,7 @@ def main(argv=None) -> int:
     ap.add_argument("--no-steps", action="store_true", help="zip을 읽지 않는다(HC-A6을 뺀다)")
     args = ap.parse_args(argv)
     t, params = load_tables(), load_params()
-    steps = None if args.no_steps else detect_exp2_steps(["E2_A_100_1", "E2_A_100_2"])
+    steps = None if args.no_steps else detect_exp2_steps(step_trials(t, params))
     sh = build_sheet(t, params, steps)
     write_csv(sh, args.out)
     print(f"검산표: {args.out} ({len(sh.rows)}줄)")
