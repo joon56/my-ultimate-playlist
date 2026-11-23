@@ -1,0 +1,72 @@
+variant,description,hypothesis,participant,metric,value_base,value_variant,supported_base,supported_variant,n_base,n_variant,value_changed,supported_changed,note
+sync_tol_5pct,동조 기준 ±3% → ±5%,H1,A,"rho(T,dC)",0.6382137545631063,0.6382137545631063,True,True,25,25,False,False,"p=0.0006(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 77.0% / 그 밖 12.0%, 평균 R 0.478 [0.312, 0.673]"
+sync_tol_5pct,동조 기준 ±3% → ±5%,H1,B,"rho(T,dC)",-0.17459483109734514,-0.17459483109734514,False,False,46,46,False,False,"p=0.2458(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 85.2% / 그 밖 8.3%, 평균 R 0.534 [0.265, 0.832]"
+sync_tol_5pct,동조 기준 ±3% → ±5%,H1,C,"rho(T,dC)",0.12396741254637944,0.12396741254637944,False,False,13,13,False,False,"p=0.6866(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 59.7% / 그 밖 8.3%, 평균 R 0.221 [-0.121, 0.701]"
+sync_tol_5pct,동조 기준 ±3% → ±5%,H1,ALL,n_supported,1.0,1.0,False,False,3,3,False,False,판정한 사람 3명 중 지지 1명
+sync_tol_5pct,동조 기준 ±3% → ±5%,H1-2,A,S3 at 100% and 120%,32.05128205128205,58.97435897435898,False,False,2,2,True,False,"100%: S3 90.7%, 평균 동조 True; 120%: S3 59.0%, 평균 동조 False"
+sync_tol_5pct,동조 기준 ±3% → ±5%,H1-2,B,S3 at 100% and 120%,23.897581792318633,38.57142857142857,False,False,2,2,True,False,"100%: S3 44.1%, 평균 동조 False; 120%: S3 38.6%, 평균 동조 False"
+sync_tol_5pct,동조 기준 ±3% → ±5%,H1-2,ALL,n_supported,0.0,0.0,False,False,2,2,False,False,판정한 사람 2명 중 지지 0명
+sync_tol_5pct,동조 기준 ±3% → ±5%,prescription,A,t_high_pct,104.25873715124816,124.11754422767638,NA,NA,0,0,True,False,
+sync_tol_5pct,동조 기준 ±3% → ±5%,prescription,A,t_high_s3_pct,,104.25873715124816,NA,NA,0,0,True,False,
+sync_tol_5pct,동조 기준 ±3% → ±5%,prescription,B,t_high_pct,,,NA,NA,0,0,False,False,
+sync_tol_5pct,동조 기준 ±3% → ±5%,prescription,B,t_high_s3_pct,,,NA,NA,0,0,False,False,
+offset_minus_5s,첫 곡 재생 시각 -5 s,H1,A,"rho(T,dC)",0.6382137545631063,0.705042249007588,True,True,25,26,True,False,"p=0.0001(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 53.7% / 그 밖 6.7%, 평균 R 0.477 [0.312, 0.667]"
+offset_minus_5s,첫 곡 재생 시각 -5 s,H1,B,"rho(T,dC)",-0.17459483109734514,-0.169572749663082,False,False,46,46,True,False,"p=0.2599(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 61.0% / 그 밖 2.7%, 평균 R 0.536 [0.264, 0.836]"
+offset_minus_5s,첫 곡 재생 시각 -5 s,H1,C,"rho(T,dC)",0.12396741254637944,0.12396741254637944,False,False,13,13,False,False,"p=0.6866(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 40.8% / 그 밖 3.8%, 평균 R 0.218 [-0.119, 0.701]"
+offset_minus_5s,첫 곡 재생 시각 -5 s,H2_speed,A,"rho(T,speed_ms)",0.5877785299797115,0.5685643729818607,True,True,24,24,True,False,p=0.0037(참고)
+offset_minus_5s,첫 곡 재생 시각 -5 s,H2_step_length,A,"rho(T,step_length_m)",0.2393035917005066,0.227949771656322,True,True,24,24,True,False,p=0.2840(참고)
+offset_minus_5s,첫 곡 재생 시각 -5 s,H2_impact,A,"rho(T,impact_g)",0.40100840026422785,0.4384180846655372,True,True,25,26,True,False,p=0.0251(참고)
+offset_minus_5s,첫 곡 재생 시각 -5 s,H2_speed,B,"rho(T,speed_ms)",,,NA,NA,0,0,False,False,표본 부족(곡 구간 0개)
+offset_minus_5s,첫 곡 재생 시각 -5 s,H2_step_length,B,"rho(T,step_length_m)",,,NA,NA,0,0,False,False,표본 부족(곡 구간 0개)
+offset_minus_5s,첫 곡 재생 시각 -5 s,H2_impact,B,"rho(T,impact_g)",0.056792920910926185,0.05338286561605616,True,True,46,46,True,False,p=0.7246(참고)
+offset_minus_5s,첫 곡 재생 시각 -5 s,H2_speed,C,"rho(T,speed_ms)",-0.2176316798036439,-0.22038651119356345,False,False,13,13,True,False,p=0.4694(참고)
+offset_minus_5s,첫 곡 재생 시각 -5 s,H2_step_length,C,"rho(T,step_length_m)",-0.2369154995330807,-0.22589617397340253,False,False,13,13,True,False,p=0.4580(참고)
+offset_minus_5s,첫 곡 재생 시각 -5 s,H2_impact,C,"rho(T,impact_g)",-0.5647404349335063,-0.5647404349335063,False,False,13,13,False,False,p=0.0443(참고)
+offset_minus_5s,첫 곡 재생 시각 -5 s,H1,ALL,n_supported,1.0,1.0,False,False,3,3,False,False,판정한 사람 3명 중 지지 1명
+offset_minus_5s,첫 곡 재생 시각 -5 s,H2_speed,ALL,n_supported,1.0,1.0,NA,NA,2,2,False,False,판정한 사람 2명 중 지지 1명
+offset_minus_5s,첫 곡 재생 시각 -5 s,H2_step_length,ALL,n_supported,1.0,1.0,NA,NA,2,2,False,False,판정한 사람 2명 중 지지 1명
+offset_minus_5s,첫 곡 재생 시각 -5 s,H2_impact,ALL,n_supported,2.0,2.0,True,True,3,3,False,False,판정한 사람 3명 중 지지 2명
+offset_minus_5s,첫 곡 재생 시각 -5 s,prescription,A,t_low_pct,102.86054325862673,102.53820868713382,NA,NA,4,4,True,False,
+offset_minus_5s,첫 곡 재생 시각 -5 s,prescription,B,t_low_pct,105.10154664776842,105.10154664776842,NA,NA,4,4,False,False,
+offset_minus_5s,첫 곡 재생 시각 -5 s,prescription,C,t_low_pct,,,NA,NA,4,4,False,False,
+offset_plus_5s,첫 곡 재생 시각 +5 s,H1,A,"rho(T,dC)",0.6382137545631063,0.6459403133350567,True,True,25,25,True,False,"p=0.0005(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 54.7% / 그 밖 6.6%, 평균 R 0.476 [0.312, 0.669]"
+offset_plus_5s,첫 곡 재생 시각 +5 s,H1,B,"rho(T,dC)",-0.17459483109734514,-0.1838949819015361,False,False,46,46,True,False,"p=0.2212(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 61.7% / 그 밖 2.6%, 평균 R 0.532 [0.265, 0.828]"
+offset_plus_5s,첫 곡 재생 시각 +5 s,H1,C,"rho(T,dC)",0.12396741254637944,0.10743842420686218,False,False,13,13,True,False,"p=0.7268(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 41.2% / 그 밖 3.6%, 평균 R 0.217 [-0.122, 0.690]"
+offset_plus_5s,첫 곡 재생 시각 +5 s,H2_speed,A,"rho(T,speed_ms)",0.5877785299797115,0.542363249802973,True,True,24,24,True,False,p=0.0062(참고)
+offset_plus_5s,첫 곡 재생 시각 +5 s,H2_step_length,A,"rho(T,step_length_m)",0.2393035917005066,0.20087527770480482,True,True,24,24,True,False,p=0.3466(참고)
+offset_plus_5s,첫 곡 재생 시각 +5 s,H2_impact,A,"rho(T,impact_g)",0.40100840026422785,0.370102165176426,True,True,25,25,True,False,p=0.0686(참고)
+offset_plus_5s,첫 곡 재생 시각 +5 s,H2_speed,B,"rho(T,speed_ms)",,,NA,NA,0,0,False,False,표본 부족(곡 구간 0개)
+offset_plus_5s,첫 곡 재생 시각 +5 s,H2_step_length,B,"rho(T,step_length_m)",,,NA,NA,0,0,False,False,표본 부족(곡 구간 0개)
+offset_plus_5s,첫 곡 재생 시각 +5 s,H2_impact,B,"rho(T,impact_g)",0.056792920910926185,0.07601323257292086,True,True,46,46,True,False,p=0.6156(참고)
+offset_plus_5s,첫 곡 재생 시각 +5 s,H2_speed,C,"rho(T,speed_ms)",-0.2176316798036439,-0.09090943586734493,False,False,13,13,True,False,p=0.7677(참고)
+offset_plus_5s,첫 곡 재생 시각 +5 s,H2_step_length,C,"rho(T,step_length_m)",-0.2369154995330807,-0.25068965648267844,False,False,13,13,True,False,p=0.4087(참고)
+offset_plus_5s,첫 곡 재생 시각 +5 s,H2_impact,C,"rho(T,impact_g)",-0.5647404349335063,-0.6473853766310926,False,False,13,13,True,False,p=0.0168(참고)
+offset_plus_5s,첫 곡 재생 시각 +5 s,H1,ALL,n_supported,1.0,1.0,False,False,3,3,False,False,판정한 사람 3명 중 지지 1명
+offset_plus_5s,첫 곡 재생 시각 +5 s,H2_speed,ALL,n_supported,1.0,1.0,NA,NA,2,2,False,False,판정한 사람 2명 중 지지 1명
+offset_plus_5s,첫 곡 재생 시각 +5 s,H2_step_length,ALL,n_supported,1.0,1.0,NA,NA,2,2,False,False,판정한 사람 2명 중 지지 1명
+offset_plus_5s,첫 곡 재생 시각 +5 s,H2_impact,ALL,n_supported,2.0,2.0,True,True,3,3,False,False,판정한 사람 3명 중 지지 2명
+offset_plus_5s,첫 곡 재생 시각 +5 s,prescription,A,t_low_pct,102.86054325862673,102.86054325862673,NA,NA,4,4,False,False,
+offset_plus_5s,첫 곡 재생 시각 +5 s,prescription,B,t_low_pct,105.10154664776842,105.10154664776842,NA,NA,4,4,False,False,
+offset_plus_5s,첫 곡 재생 시각 +5 s,prescription,C,t_low_pct,,,NA,NA,4,4,False,False,
+exclude_hurried,서두른 회차를 뺀다,,ALL,,,,,,0,0,False,False,서두른 회차가 없어 기본 결과와 같다; 기록이 빈 회차 20개는 모르는 것으로 두고 빼지 않았다
+exclude_rain,비 온 회차를 뺀다,,ALL,,,,,,0,0,False,False,비 온 회차가 없어 기본 결과와 같다; 기록이 빈 회차 27개는 모르는 것으로 두고 빼지 않았다
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H1,A,"rho(T,dC)",0.6382137545631063,0.6382137545631063,True,True,25,25,False,False,"A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; p=0.0006(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 54.1% / 그 밖 6.7%, 평균 R 0.457 [0.280, 0.660]"
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H1,B,"rho(T,dC)",-0.17459483109734514,-0.17459483109734514,False,False,46,46,False,False,"A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; p=0.2458(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 61.7% / 그 밖 2.8%, 평균 R 0.525 [0.289, 0.787]"
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H1,C,"rho(T,dC)",0.12396741254637944,0.12396741254637944,False,False,13,13,False,False,"A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; p=0.6866(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 40.7% / 그 밖 3.9%, 평균 R 0.221 [-0.121, 0.701]"
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H2_speed,A,"rho(T,speed_ms)",0.5877785299797115,0.5877785299797115,True,True,24,24,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; p=0.0025(참고)
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H2_step_length,A,"rho(T,step_length_m)",0.2393035917005066,0.2393035917005066,True,True,24,24,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; p=0.2601(참고)
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H2_impact,A,"rho(T,impact_g)",0.40100840026422785,0.40100840026422785,True,True,25,25,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; p=0.0470(참고)
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H2_speed,B,"rho(T,speed_ms)",,,NA,NA,0,0,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; 표본 부족(곡 구간 0개)
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H2_step_length,B,"rho(T,step_length_m)",,,NA,NA,0,0,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; 표본 부족(곡 구간 0개)
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H2_impact,B,"rho(T,impact_g)",0.056792920910926185,0.056792920910926185,True,True,46,46,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; p=0.7077(참고)
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H2_speed,C,"rho(T,speed_ms)",-0.2176316798036439,-0.2176316798036439,False,False,13,13,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; p=0.4751(참고)
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H2_step_length,C,"rho(T,step_length_m)",-0.2369154995330807,-0.2369154995330807,False,False,13,13,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; p=0.4358(참고)
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H2_impact,C,"rho(T,impact_g)",-0.5647404349335063,-0.5647404349335063,False,False,13,13,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; p=0.0443(참고)
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H1,ALL,n_supported,1.0,1.0,False,False,3,3,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; 판정한 사람 3명 중 지지 1명
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H2_speed,ALL,n_supported,1.0,1.0,NA,NA,2,2,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; 판정한 사람 2명 중 지지 1명
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H2_step_length,ALL,n_supported,1.0,1.0,NA,NA,2,2,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; 판정한 사람 2명 중 지지 1명
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),H2_impact,ALL,n_supported,2.0,2.0,True,True,3,3,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분; 판정한 사람 3명 중 지지 2명
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),prescription,A,t_low_pct,102.86054325862673,102.31801511583713,NA,NA,4,4,True,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),prescription,B,t_low_pct,105.10154664776842,105.8964491093941,NA,NA,4,4,True,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분
+pc_first_silent,평소 케이던스를 첫 무음 회차 하나로(임시 PC),prescription,C,t_low_pct,,,NA,NA,4,4,False,False,A 99.7 → 100.2 걸음/분; B 98.0 → 97.3 걸음/분; C 118.5 → 118.5 걸음/분
+exclude_tried_to_sync,"박자에 맞추려 했다고 적은 회차를 뺀다(종료 설문, D-42)",,ALL,,,,,,0,0,False,False,종료 설문이 아직 없다(data/debrief.csv가 비어 있다)

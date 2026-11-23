@@ -1,0 +1,21 @@
+hypothesis,participant,metric,value,ci_low,ci_high,n,criterion,supported,note
+H1,A,"rho(T,dC)",0.6382137545631063,-0.06833300470845151,0.8707250903187262,25,"rho(T,dC)>0 & p<0.05 & S3(near PC +-10%) > S3(far)",True,"p=0.0006(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 54.1% / 그 밖 6.7%, 평균 R 0.478 [0.312, 0.673]"
+H1,B,"rho(T,dC)",-0.17459483109734514,-0.542886725361715,0.3430320113409725,46,"rho(T,dC)>0 & p<0.05 & S3(near PC +-10%) > S3(far)",False,"p=0.2458(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 61.7% / 그 밖 2.8%, 평균 R 0.534 [0.265, 0.832]"
+H1,C,"rho(T,dC)",0.12396741254637944,-0.5092466034075269,0.8116794499134277,13,"rho(T,dC)>0 & p<0.05 & S3(near PC +-10%) > S3(far)",False,"p=0.6866(곡 구간은 같은 회차 안에서 독립이 아니라 참고치), S3 PC±10% 곡 40.7% / 그 밖 3.9%, 평균 R 0.221 [-0.121, 0.701]"
+H2_speed,A,"rho(T,speed_ms)",0.5877785299797115,,,24,"rho>0 ('증가 경향', D-60)",True,p=0.0025(참고)
+H2_step_length,A,"rho(T,step_length_m)",0.2393035917005066,,,24,"rho>0 ('증가 경향', D-60)",True,p=0.2601(참고)
+H2_impact,A,"rho(T,impact_g)",0.40100840026422785,,,25,"rho>0 ('증가 경향', D-60)",True,p=0.0470(참고)
+H2_variability,A,CV exp2 vs exp1,,,,0,,NA,실험 2 데이터가 필요하다(D-11)
+H2_speed,B,"rho(T,speed_ms)",,,,0,rho>0,NA,표본 부족(곡 구간 0개)
+H2_step_length,B,"rho(T,step_length_m)",,,,0,rho>0,NA,표본 부족(곡 구간 0개)
+H2_impact,B,"rho(T,impact_g)",0.056792920910926185,,,46,"rho>0 ('증가 경향', D-60)",True,p=0.7077(참고)
+H2_variability,B,CV exp2 vs exp1,,,,0,,NA,실험 2 데이터가 필요하다(D-11)
+H2_speed,C,"rho(T,speed_ms)",-0.2176316798036439,,,13,"rho>0 ('증가 경향', D-60)",False,p=0.4751(참고)
+H2_step_length,C,"rho(T,step_length_m)",-0.2369154995330807,,,13,"rho>0 ('증가 경향', D-60)",False,p=0.4358(참고)
+H2_impact,C,"rho(T,impact_g)",-0.5647404349335063,,,13,"rho>0 ('증가 경향', D-60)",False,p=0.0443(참고)
+H2_variability,C,CV exp2 vs exp1,,,,0,,NA,실험 2 데이터가 필요하다(D-11)
+H1,ALL,n_supported,1.0,,,3,>= 2 of 3,False,판정한 사람 3명 중 지지 1명
+H2_speed,ALL,n_supported,1.0,,,2,>= 2 of 3,NA,판정한 사람 2명 중 지지 1명
+H2_step_length,ALL,n_supported,1.0,,,2,>= 2 of 3,NA,판정한 사람 2명 중 지지 1명
+H2_impact,ALL,n_supported,2.0,,,3,>= 2 of 3,True,판정한 사람 3명 중 지지 2명
+H2_variability,ALL,n_supported,0.0,,,0,>= 2 of 3,NA,판정한 사람 0명 중 지지 0명

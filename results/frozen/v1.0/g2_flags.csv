@@ -1,0 +1,25 @@
+participant,flag_id,description,value,threshold,triggered,suggested_response
+A,F1,일상에서 동조가 거의 없음,playlist mean dC within SESOI: False,,NA(사람),
+A,F2,과동조,0,S3 >= 80%,False,
+A,F3,반 박자·두 배 박자,0,>= 1,False,
+A,F4,곡마다 들쭉날쭉,within 3.925 / between 8.081,within > between,False,
+A,F5,날마다 편차 큼(무음 C의 CV),0.7498685902316723,> 3.0%,False,
+A,F6,가장 높은 단계에서도 안 뜀,NA,,NA,실험 2 뒤
+A,F7,충격 잡음 큼(같은 조건 회차 간 CV 최대),4.548692549946405,> 15.0%,False,
+A,F8,진자 예측과 실측의 큰 차이,NA,,NA,"실험 3 뒤, 예상된 결과로 보고"
+B,F1,일상에서 동조가 거의 없음,playlist mean dC within SESOI: False,,NA(사람),
+B,F2,과동조,2,S3 >= 80%,True,
+B,F3,반 박자·두 배 박자,0,>= 1,False,
+B,F4,곡마다 들쭉날쭉,within 2.891 / between 1.086,within > between,True,
+B,F5,날마다 편차 큼(무음 C의 CV),2.1108197260882218,> 3.0%,False,
+B,F6,가장 높은 단계에서도 안 뜀,NA,,NA,실험 2 뒤
+B,F7,충격 잡음 큼(같은 조건 회차 간 CV 최대),2.524204576597846,> 15.0%,False,
+B,F8,진자 예측과 실측의 큰 차이,NA,,NA,"실험 3 뒤, 예상된 결과로 보고"
+C,F1,일상에서 동조가 거의 없음,playlist mean dC within SESOI: False,,NA(사람),
+C,F2,과동조,0,S3 >= 80%,False,
+C,F3,반 박자·두 배 박자,0,>= 1,False,
+C,F4,곡마다 들쭉날쭉,within 4.493 / between 2.229,within > between,True,
+C,F5,날마다 편차 큼(무음 C의 CV),,> 3.0%,NA,
+C,F6,가장 높은 단계에서도 안 뜀,NA,,NA,실험 2 뒤
+C,F7,충격 잡음 큼(같은 조건 회차 간 CV 최대),,> 15.0%,NA,
+C,F8,진자 예측과 실측의 큰 차이,NA,,NA,"실험 3 뒤, 예상된 결과로 보고"

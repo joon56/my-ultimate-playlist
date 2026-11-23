@@ -1,0 +1,14 @@
+hypothesis,participant,metric,value,ci_low,ci_high,n,criterion,supported,note
+H1-2,A,S3 at 100% and 120%,32.05128205128205,,,2,S3 >= 80% at both,False,"100%: S3 69.3%, 평균 동조 True; 120%: S3 32.1%, 평균 동조 False"
+H1-2,B,S3 at 100% and 120%,23.897581792318633,,,2,S3 >= 80% at both,False,"100%: S3 23.9%, 평균 동조 False; 120%: S3 25.7%, 평균 동조 False"
+H3,A,Fr at transition,1.1911038051462715,,,2,Fr(last walk) <= 0.5 <= Fr(first run),True,"마지막 걷기 150% Fr 0.398, 처음 뜀 180% Fr 1.191; 영상 판정이 비었거나 알 수 없는 단계: 165%"
+H3,B,Fr at transition,1.19641832760634,,,2,Fr(last walk) <= 0.5 <= Fr(first run),False,"마지막 걷기 150% Fr 0.551, 처음 뜀 180% Fr 1.196; 영상 판정이 비었거나 알 수 없는 단계: 165%"
+H2_variability,A,CV exp2 - exp1,-0.9143682545645109,,,2,mean CV exp2 > exp1,False,"짝지은 단계 2개: 실험 2 CV 3.33%, 실험 1 CV 4.24%(D-11 초안)"
+H2_variability,B,CV exp2 - exp1,1.1496803935275195,,,3,mean CV exp2 > exp1,True,"짝지은 단계 3개: 실험 2 CV 3.55%, 실험 1 CV 2.40%(D-11 초안)"
+H4,A,C_pend vs PC,78.38184747475962,,,2,C_pend < PC,True,"C_pend 78.4 걸음/분, PC 99.7 걸음/분"
+H4,B,C_pend vs PC,83.39618381000817,,,2,C_pend < PC,True,"C_pend 83.4 걸음/분, PC 98.0 걸음/분"
+H4_model,ALL,mean |period error| %,10.042792310970771,,,2,<= 15.0%,True,모델 타당성(SPEC §5.8). 가설 4의 지지 판정과 따로 본다
+H1-2,ALL,n_supported,0.0,,,2,>= 2 of 2,False,판정한 사람 2명 중 지지 0명
+H3,ALL,n_supported,1.0,,,2,>= 2 of 2,False,판정한 사람 2명 중 지지 1명
+H2_variability,ALL,n_supported,1.0,,,2,>= 2 of 2,False,판정한 사람 2명 중 지지 1명
+H4,ALL,n_supported,2.0,,,2,>= 2 of 2,True,판정한 사람 2명 중 지지 2명
