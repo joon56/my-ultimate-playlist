@@ -37,3 +37,4 @@ Thumbs.db
 # 발표 슬라이드의 영상 클립·장면 이미지·그림(사람이 나온다. 원본 영상에서 다시 만든다)
 docs/slides/media/
 docs/slides/PPT용_영상_이미지/
+docs/slides/*.zip
