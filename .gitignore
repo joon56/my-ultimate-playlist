@@ -38,3 +38,7 @@ Thumbs.db
 docs/slides/media/
 docs/slides/PPT용_영상_이미지/
 docs/slides/*.zip
+# 실험 1 코스의 지도 캡처(걷는 곳과 주소가 보인다. DECISIONS D-95: 저장소에 올리지 않는다)
+docs/slides/*.png
+docs/slides/*.jpg
+docs/slides/*.jpeg
